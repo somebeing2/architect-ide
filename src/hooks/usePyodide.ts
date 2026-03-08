@@ -1,13 +1,13 @@
 import { useState, useCallback, useRef } from 'react';
 
 interface PyodideInstance {
-  runPythonAsync: (code: string) => Promise<any>;
+  runPythonAsync: (code: string) => Promise<unknown>;
   loadPackage: (pkg: string | string[]) => Promise<void>;
   FS: {
     writeFile: (path: string, data: Uint8Array) => void;
   };
   globals: {
-    get: (name: string) => any;
+    get: (name: string) => unknown;
   };
 }
 
@@ -105,7 +105,7 @@ sys.stderr = _capture
       // Run user code and capture stdout
       const wrappedCode = `${code}\n\n_output = _capture.get_output()`;
       await pyodide.runPythonAsync(wrappedCode);
-      const capturedOutput = pyodide.globals.get('_output') || '';
+      const capturedOutput = (pyodide.globals.get('_output') as string) || '';
 
       // Extract Plotly figure HTML if the user assigned one to `_fig`
       let plotHtml: string | undefined;
@@ -116,7 +116,8 @@ try:
 except Exception:
     _plot_html = ''
 `);
-        plotHtml = pyodide.globals.get('_plot_html') || undefined;
+        const rawHtml = (pyodide.globals.get('_plot_html') as string) || undefined;
+        plotHtml = rawHtml || undefined;
         if (plotHtml === '') plotHtml = undefined;
       } catch {
         // No plot produced — that's fine
@@ -125,8 +126,8 @@ except Exception:
       const result = capturedOutput || 'Analysis complete.';
       setOutput(prev => [...prev, result]);
       return { output: result, plotHtml };
-    } catch (err: any) {
-      const errMsg = `Error: ${err.message}`;
+    } catch (err: unknown) {
+      const errMsg = `Error: ${err instanceof Error ? err.message : String(err)}`;
       setOutput(prev => [...prev, errMsg]);
       return { output: errMsg };
     }

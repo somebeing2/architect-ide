@@ -5,7 +5,9 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  /* ── Dark theme (default) ── */
+  :root,
+  [data-theme="dark"] {
     --background: 220 14% 10%;
     --foreground: 220 13% 91%;
 
@@ -58,6 +60,59 @@
     --warning: 38 92% 50%;
     --success: 160 84% 39%;
   }
+
+  /* ── Light theme ── */
+  [data-theme="light"] {
+    --background: 0 0% 98%;
+    --foreground: 220 14% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 14% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 14% 12%;
+
+    --primary: 210 100% 44%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 93%;
+    --secondary-foreground: 220 14% 20%;
+
+    --muted: 220 14% 95%;
+    --muted-foreground: 220 14% 45%;
+
+    --accent: 160 60% 35%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 85%;
+    --input: 220 13% 85%;
+    --ring: 210 100% 44%;
+
+    --sidebar-background: 220 14% 95%;
+    --sidebar-foreground: 220 14% 25%;
+    --sidebar-primary: 210 100% 44%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 90%;
+    --sidebar-accent-foreground: 220 14% 12%;
+    --sidebar-border: 220 14% 85%;
+    --sidebar-ring: 210 100% 44%;
+
+    /* IDE-specific tokens */
+    --terminal-bg: 220 14% 94%;
+    --terminal-foreground: 160 60% 28%;
+    --editor-bg: 0 0% 100%;
+    --editor-line: 220 14% 96%;
+    --tab-active: 210 100% 44%;
+    --tab-inactive: 220 14% 90%;
+    --dropzone-border: 210 100% 44%;
+    --dropzone-bg: 210 100% 44%;
+    --status-bar: 220 14% 92%;
+    --warning: 38 92% 42%;
+    --success: 160 60% 30%;
+  }
 }
 
 @layer base {
@@ -97,6 +152,29 @@
 
   .animate-pulse-glow {
     animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  /* Framer Motion transition helpers */
+  .fm-fade-enter {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  .fm-fade-enter-active {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 200ms ease, transform 200ms ease;
+  }
+
+  .fm-slide-right-enter {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+
+  .fm-slide-right-enter-active {
+    opacity: 1;
+    transform: translateX(0);
+    transition: opacity 200ms ease, transform 200ms ease;
   }
 
   @keyframes pulse-glow {
@@ -147,3 +225,52 @@ pre[class*="language-"] {
 .token.class-name,
 .token.decorator        { color: #4ec9b0; }   /* VS-teal      */
 .token.parameter        { color: #9cdcfe; }   /* VS-light-blue*/
+
+/* Light theme Prism overrides */
+[data-theme="light"] .token.comment,
+[data-theme="light"] .token.prolog,
+[data-theme="light"] .token.doctype,
+[data-theme="light"] .token.cdata          { color: #448b44; }
+[data-theme="light"] .token.punctuation    { color: #555555; }
+[data-theme="light"] .token.keyword,
+[data-theme="light"] .token.operator,
+[data-theme="light"] .token.boolean,
+[data-theme="light"] .token.important      { color: #0070c1; }
+[data-theme="light"] .token.string,
+[data-theme="light"] .token.char           { color: #a31515; }
+[data-theme="light"] .token.number         { color: #09885a; }
+[data-theme="light"] .token.builtin,
+[data-theme="light"] .token.function       { color: #795e26; }
+[data-theme="light"] .token.class-name,
+[data-theme="light"] .token.decorator      { color: #267f99; }
+[data-theme="light"] .token.parameter      { color: #001080; }
+
+/* ── Mobile breakpoints ── */
+@media (max-width: 640px) {
+  .sidebar-collapse {
+    display: none;
+  }
+
+  .mobile-full {
+    width: 100% !important;
+  }
+
+  .mobile-stack {
+    flex-direction: column !important;
+  }
+
+  .mobile-hidden {
+    display: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .tablet-hidden {
+    display: none !important;
+  }
+
+  .tablet-narrow {
+    width: 40px !important;
+    overflow: hidden;
+  }
+}

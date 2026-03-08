@@ -34,7 +34,7 @@ export function CodeEditor({ code, onChange, onRun, running, title }: CodeEditor
 
   // ── Syntax highlight via Prism (loaded globally in index.html) ──────────
   const highlightedCode = useMemo(() => {
-    const Prism = (window as any).Prism;
+    const Prism = (window as unknown as { Prism?: { languages?: { python?: unknown }; highlight: (code: string, grammar: unknown, language: string) => string } }).Prism;
     if (Prism?.languages?.python) {
       return Prism.highlight(code, Prism.languages.python, 'python');
     }
