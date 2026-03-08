@@ -119,3 +119,31 @@
     color: hsl(var(--terminal-foreground));
   }
 }
+
+/* ── Prism.js overrides: transparent bg to match IDE theme ── */
+code[class*="language-"],
+pre[class*="language-"] {
+  background: transparent !important;
+  text-shadow: none !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+}
+
+/* Token colour palette tuned for the dark IDE theme */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata            { color: #6a9955; }   /* muted green  */
+.token.punctuation      { color: #808080; }   /* grey         */
+.token.keyword,
+.token.operator,
+.token.boolean,
+.token.important        { color: #569cd6; }   /* VS-blue      */
+.token.string,
+.token.char             { color: #ce9178; }   /* VS-orange    */
+.token.number           { color: #b5cea8; }   /* VS-green num */
+.token.builtin,
+.token.function         { color: #dcdcaa; }   /* VS-yellow    */
+.token.class-name,
+.token.decorator        { color: #4ec9b0; }   /* VS-teal      */
+.token.parameter        { color: #9cdcfe; }   /* VS-light-blue*/

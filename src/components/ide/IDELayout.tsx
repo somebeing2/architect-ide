@@ -1,5 +1,8 @@
 import { useState, useCallback } from 'react';
-import { Settings, BookTemplate, Github, Cpu, ChevronDown, ChevronUp, Sparkles, AlertCircle } from 'lucide-react';
+import {
+  Settings, BookTemplate, Github, Cpu,
+  ChevronDown, ChevronUp, Sparkles, AlertCircle, Database,
+} from 'lucide-react';
 import { CSVDropzone } from './CSVDropzone';
 import { DataPreview } from './DataPreview';
 import { CodeEditor } from './CodeEditor';
@@ -10,21 +13,26 @@ import { HistorySidebar, type HistoryEntry } from './HistorySidebar';
 import { usePyodide } from '@/hooks/usePyodide';
 import { templates, type Template } from '@/lib/templates';
 
+const TITANIC_URL =
+  'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv';
+
 export function IDELayout() {
-  const [csvData, setCsvData] = useState<string | null>(null);
+  const [csvData, setCsvData]         = useState<string | null>(null);
   const [csvFileName, setCsvFileName] = useState<string>('');
-  const [code, setCode] = useState('# Upload a CSV and select a template to begin\n');
-  const [plotHtml, setPlotHtml] = useState<string | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [templatesOpen, setTemplatesOpen] = useState(false);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [running, setRunning] = useState(false);
+  const [code, setCode]               = useState('# Upload a CSV and select a template to begin\n');
+  const [plotHtml, setPlotHtml]       = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen]     = useState(false);
+  const [templatesOpen, setTemplatesOpen]   = useState(false);
+  const [history, setHistory]         = useState<HistoryEntry[]>([]);
+  const [running, setRunning]         = useState(false);
   const [terminalExpanded, setTerminalExpanded] = useState(true);
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
+  const [aiPrompt, setAiPrompt]       = useState('');
+  const [aiLoading, setAiLoading]     = useState(false);
+  const [titanicLoading, setTitanicLoading] = useState(false);
 
   const { output, clearOutput, runCode, loading: pyodideLoading } = usePyodide();
 
+  // ── File handlers ────────────────────────────────────────────────────────
   const handleFileLoaded = useCallback((data: string, fileName: string) => {
     setCsvData(data);
     setCsvFileName(fileName);
@@ -35,22 +43,39 @@ export function IDELayout() {
     setCsvFileName('');
   }, []);
 
+  // ── Titanic sample dataset ───────────────────────────────────────────────
+  const handleLoadTitanic = useCallback(async () => {
+    setTitanicLoading(true);
+    try {
+      const response = await fetch(TITANIC_URL);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const text = await response.text();
+      handleFileLoaded(text, 'titanic.csv');
+    } catch (err: any) {
+      console.error('Failed to load Titanic dataset:', err.message);
+    } finally {
+      setTitanicLoading(false);
+    }
+  }, [handleFileLoaded]);
+
+  // ── Run code ─────────────────────────────────────────────────────────────
   const handleRunCode = useCallback(async () => {
     if (!csvData) return;
     setRunning(true);
     const result = await runCode(code, csvData);
     if (result.plotHtml) setPlotHtml(result.plotHtml);
-    
+
     setHistory(prev => [{
-      id: Date.now().toString(),
-      name: code.split('\n').find(l => l.startsWith('#'))?.replace('#', '').trim() || 'Analysis',
+      id       : Date.now().toString(),
+      name     : code.split('\n').find(l => l.startsWith('#'))?.replace('#', '').trim() || 'Analysis',
       timestamp: new Date(),
       code,
     }, ...prev]);
-    
+
     setRunning(false);
   }, [code, csvData, runCode]);
 
+  // ── Template / history ───────────────────────────────────────────────────
   const handleSelectTemplate = useCallback((template: Template) => {
     setCode(template.code);
     setTemplatesOpen(false);
@@ -64,44 +89,44 @@ export function IDELayout() {
     setHistory(prev => prev.filter(e => e.id !== id));
   }, []);
 
+  // ── AI generation ────────────────────────────────────────────────────────
   const getCSVSchema = useCallback(() => {
     if (!csvData) return '';
-    const lines = csvData.trim().split('\n');
+    const lines  = csvData.trim().split('\n');
     const headers = lines[0];
-    const sample = lines.slice(1, 3).join('\n');
+    const sample  = lines.slice(1, 3).join('\n');
     return `Columns: ${headers}\nSample:\n${sample}`;
   }, [csvData]);
 
   const handleAIGenerate = useCallback(async () => {
     const apiKey = localStorage.getItem('anthropic_api_key');
-    if (!apiKey) return;
-    if (!csvData || !aiPrompt.trim()) return;
+    if (!apiKey || !csvData || !aiPrompt.trim()) return;
 
     setAiLoading(true);
     try {
       const schema = getCSVSchema();
       const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
+        method : 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
+          'Content-Type'                         : 'application/json',
+          'x-api-key'                            : apiKey,
+          'anthropic-version'                    : '2023-06-01',
           'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
+          model     : 'claude-sonnet-4-20250514',
           max_tokens: 2048,
-          messages: [{
-            role: 'user',
-            content: `You are a data science assistant. Generate Python code using pandas to analyze a CSV file at '/data.csv'. 
+          messages  : [{
+            role   : 'user',
+            content: `You are a data science assistant. Generate Python code using pandas to analyze a CSV file at '/data.csv'.
 Schema: ${schema}
 Task: ${aiPrompt}
-Rules: Use pandas. If visualization needed, use plotly and store figure in variable '_fig'. Print results. Only output Python code, no markdown.`
+Rules: Use pandas. If visualization needed, use plotly and store figure in variable '_fig'. Print results. Only output Python code, no markdown.`,
           }],
         }),
       });
 
-      const data = await response.json();
+      const data          = await response.json();
       const generatedCode = data.content?.[0]?.text || '# AI generation failed';
       setCode(generatedCode.replace(/```python\n?/g, '').replace(/```\n?/g, ''));
     } catch (err: any) {
@@ -112,17 +137,35 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
 
   const hasApiKey = !!localStorage.getItem('anthropic_api_key');
 
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      {/* Title Bar */}
+
+      {/* ── Title bar ── */}
       <header className="flex items-center justify-between px-4 py-2 bg-card border-b border-border shrink-0">
         <div className="flex items-center gap-3">
           <Cpu className="w-5 h-5 text-primary" />
-          <h1 className="text-sm font-bold text-foreground tracking-wide">Architect<span className="text-primary">-WASM</span></h1>
+          <h1 className="text-sm font-bold text-foreground tracking-wide">
+            Architect<span className="text-primary">-WASM</span>
+          </h1>
         </div>
+
         <div className="flex items-center gap-1">
           <CSVDropzone onFileLoaded={handleFileLoaded} fileName={csvFileName} onClear={handleClearFile} />
-          
+
+          {/* Sample data button – only shown when no file is loaded */}
+          {!csvFileName && (
+            <button
+              onClick={handleLoadTitanic}
+              disabled={titanicLoading}
+              title="Load the Titanic dataset as a demo"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 disabled:opacity-50 transition-colors ml-1"
+            >
+              <Database className="w-3.5 h-3.5 text-primary" />
+              {titanicLoading ? 'Loading…' : 'Sample Data'}
+            </button>
+          )}
+
           {/* Templates dropdown */}
           <div className="relative ml-2">
             <button
@@ -167,16 +210,18 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* ── Main content ── */}
       <div className="flex flex-1 overflow-hidden">
+
         {/* Sidebar */}
         <aside className="w-56 shrink-0 bg-sidebar border-r border-border overflow-hidden">
           <HistorySidebar entries={history} onSelect={handleHistorySelect} onDelete={handleHistoryDelete} />
         </aside>
 
-        {/* Editor + Preview Area */}
+        {/* Editor + preview area */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Top: CSV Preview or Welcome */}
+
+          {/* Top: CSV preview or welcome screen */}
           {csvData ? (
             <div className="border-b border-border p-4 overflow-auto scrollbar-thin max-h-64 shrink-0">
               <DataPreview csvData={csvData} />
@@ -186,15 +231,38 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
               <div className="text-center max-w-md">
                 <Cpu className="w-16 h-16 text-primary/20 mx-auto mb-4" />
                 <h2 className="text-lg font-semibold text-foreground mb-2">Architect-WASM</h2>
-                <p className="text-sm text-muted-foreground mb-6">Client-side data science powered by WebAssembly. Upload a CSV to start analyzing.</p>
+                <p className="text-sm text-muted-foreground mb-6">
+                  Client-side data science powered by WebAssembly.
+                  Upload a CSV to start analyzing — or load the demo dataset below.
+                </p>
                 <CSVDropzone onFileLoaded={handleFileLoaded} fileName={csvFileName} onClear={handleClearFile} />
+
+                {/* Divider */}
+                <div className="flex items-center gap-3 mt-5 mb-1">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-[11px] text-muted-foreground uppercase tracking-widest">or</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+
+                {/* Titanic demo button */}
+                <button
+                  onClick={handleLoadTitanic}
+                  disabled={titanicLoading}
+                  className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-border bg-secondary text-sm font-medium text-foreground hover:bg-secondary/80 hover:border-primary/40 disabled:opacity-50 transition-all"
+                >
+                  <Database className="w-4 h-4 text-primary" />
+                  {titanicLoading ? 'Fetching Titanic dataset…' : 'Load Titanic Dataset (Demo)'}
+                </button>
+                <p className="text-[11px] text-muted-foreground mt-2">
+                  891 rows · survival, age, fare, class and more
+                </p>
               </div>
             </div>
           )}
 
           {csvData && (
             <>
-              {/* AI Prompt Bar */}
+              {/* AI prompt bar */}
               <div className="px-4 py-2 border-b border-border bg-card/50 shrink-0">
                 {hasApiKey ? (
                   <div className="flex gap-2">
@@ -202,7 +270,7 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
                       value={aiPrompt}
                       onChange={e => setAiPrompt(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && handleAIGenerate()}
-                      placeholder="Ask AI to generate analysis code..."
+                      placeholder="Ask AI to generate analysis code…"
                       className="flex-1 px-3 py-1.5 rounded bg-secondary border border-border text-foreground text-xs font-mono placeholder:text-muted-foreground/50 outline-none focus:border-primary transition-colors"
                     />
                     <button
@@ -211,18 +279,24 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      {aiLoading ? 'Generating...' : 'Generate'}
+                      {aiLoading ? 'Generating…' : 'Generate'}
                     </button>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <AlertCircle className="w-3.5 h-3.5 text-warning" />
-                    <span>Use <button onClick={() => setTemplatesOpen(true)} className="text-primary hover:underline">Templates</button> or <button onClick={() => setSettingsOpen(true)} className="text-primary hover:underline">enter API Key</button> for AI-powered analysis</span>
+                    <span>
+                      Use{' '}
+                      <button onClick={() => setTemplatesOpen(true)} className="text-primary hover:underline">Templates</button>
+                      {' '}or{' '}
+                      <button onClick={() => setSettingsOpen(true)} className="text-primary hover:underline">enter API Key</button>
+                      {' '}for AI-powered analysis
+                    </span>
                   </div>
                 )}
               </div>
 
-              {/* Code + Plot */}
+              {/* Code editor + plot viewer */}
               <div className="flex-1 flex overflow-hidden">
                 <div className={`${plotHtml ? 'w-1/2' : 'w-full'} flex flex-col overflow-hidden p-2`}>
                   <CodeEditor
@@ -249,7 +323,9 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
                 className="absolute right-6 z-10 p-0.5 text-muted-foreground hover:text-foreground"
                 style={{ marginTop: '4px' }}
               >
-                {terminalExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                {terminalExpanded
+                  ? <ChevronDown className="w-3.5 h-3.5" />
+                  : <ChevronUp className="w-3.5 h-3.5" />}
               </button>
               <Terminal output={output} onClear={clearOutput} loading={running || pyodideLoading} />
             </div>
@@ -257,18 +333,18 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
         </div>
       </div>
 
-      {/* Status Bar */}
+      {/* ── Status bar ── */}
       <footer className="flex items-center justify-between px-4 py-1 bg-status-bar border-t border-border text-[11px] text-muted-foreground shrink-0">
         <div className="flex items-center gap-3">
           <span className={`flex items-center gap-1 ${pyodideLoading ? 'text-warning' : 'text-success'}`}>
             <span className="w-1.5 h-1.5 rounded-full bg-current" />
-            {pyodideLoading ? 'Loading Pyodide...' : 'Pyodide Ready'}
+            {pyodideLoading ? 'Loading Pyodide…' : 'Pyodide Ready'}
           </span>
           {csvFileName && <span>📄 {csvFileName}</span>}
         </div>
         <div className="flex items-center gap-3">
           <span>Python 3.11 (WASM)</span>
-          <span>Pandas • Plotly</span>
+          <span>Pandas · Plotly · Local</span>
         </div>
       </footer>
 

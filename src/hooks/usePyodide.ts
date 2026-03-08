@@ -17,6 +17,9 @@ declare global {
   }
 }
 
+// All Python execution runs entirely in-browser via Pyodide (WebAssembly).
+// External network is only used once at startup to fetch the WASM runtime and
+// packages from jsDelivr/PyPI; after that everything is local in the browser.
 export function usePyodide() {
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
@@ -26,14 +29,14 @@ export function usePyodide() {
   const loadPyodide = useCallback(async () => {
     if (pyodideRef.current) return pyodideRef.current;
     setLoading(true);
-    setOutput(prev => [...prev, '>>> Loading Pyodide runtime...']);
+    setOutput(prev => [...prev, '>>> Loading Pyodide WASM runtime…']);
 
-    // Load script if not present
+    // Inject the Pyodide bootstrap script if not already present
     if (!window.loadPyodide) {
       await new Promise<void>((resolve, reject) => {
         const script = document.createElement('script');
         script.src = 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js';
-        script.onload = () => resolve();
+        script.onload  = () => resolve();
         script.onerror = reject;
         document.head.appendChild(script);
       });
@@ -43,9 +46,18 @@ export function usePyodide() {
       indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/',
     });
 
+    // ── Core packages ──────────────────────────────────────────────────────
+    setOutput(prev => [...prev, '>>> Installing core packages (pandas, micropip)…']);
     await pyodide.loadPackage(['pandas', 'micropip']);
-    
-    // Set up stdout capture
+
+    // Pre-install plotly so templates run instantly without a network fetch
+    setOutput(prev => [...prev, '>>> Installing plotly via micropip…']);
+    await pyodide.runPythonAsync(`
+import micropip
+await micropip.install('plotly')
+`);
+
+    // ── stdout / stderr capture ────────────────────────────────────────────
     await pyodide.runPythonAsync(`
 import sys
 from io import StringIO
@@ -71,45 +83,43 @@ sys.stderr = _capture
     pyodideRef.current = pyodide;
     setReady(true);
     setLoading(false);
-    setOutput(prev => [...prev, '>>> Pyodide ready. Pandas loaded.']);
+    setOutput(prev => [...prev, '>>> Pyodide ready — pandas & plotly loaded. All execution is local (WASM).']);
     return pyodide;
   }, []);
 
-  const runCode = useCallback(async (code: string, csvData?: string): Promise<{ output: string; plotHtml?: string }> => {
+  const runCode = useCallback(async (
+    code: string,
+    csvData?: string,
+  ): Promise<{ output: string; plotHtml?: string }> => {
     const pyodide = await loadPyodide();
-    
-    setOutput(prev => [...prev, '>>> Running analysis...']);
+
+    setOutput(prev => [...prev, '>>> Running analysis…']);
 
     try {
+      // Write CSV to Pyodide's in-memory virtual filesystem
       if (csvData) {
         const encoder = new TextEncoder();
         pyodide.FS.writeFile('/data.csv', encoder.encode(csvData));
       }
 
-      // Inject plotly HTML capture
-      const wrappedCode = `
-${code}
-
-# Capture output
-_output = _capture.get_output()
-`;
-
+      // Run user code and capture stdout
+      const wrappedCode = `${code}\n\n_output = _capture.get_output()`;
       await pyodide.runPythonAsync(wrappedCode);
       const capturedOutput = pyodide.globals.get('_output') || '';
-      
-      // Check for plotly figure
+
+      // Extract Plotly figure HTML if the user assigned one to `_fig`
       let plotHtml: string | undefined;
       try {
         await pyodide.runPythonAsync(`
 try:
     _plot_html = _fig.to_html(include_plotlyjs='cdn', full_html=False) if '_fig' in dir() else ''
-except:
+except Exception:
     _plot_html = ''
 `);
         plotHtml = pyodide.globals.get('_plot_html') || undefined;
         if (plotHtml === '') plotHtml = undefined;
       } catch {
-        // no plot
+        // No plot produced — that's fine
       }
 
       const result = capturedOutput || 'Analysis complete.';
