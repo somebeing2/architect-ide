@@ -182,7 +182,7 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-background overflow-y-auto">
 
       {/* ── Title bar ── */}
       <header className="flex items-center justify-between px-4 py-2 bg-card border-b border-border shrink-0">
@@ -344,7 +344,7 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
                       onSwitchToEditor={() => setActiveMainTab('editor')}
                     />
                   </div>
-                  <div className="flex-1 overflow-hidden p-2 relative">
+                  <div className="flex-1 overflow-y-auto p-2 relative">
                     {plotHtml ? (
                       <PlotViewer html={plotHtml} onClose={() => setPlotHtml(null)} />
                     ) : (

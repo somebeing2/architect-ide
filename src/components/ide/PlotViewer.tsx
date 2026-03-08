@@ -6,7 +6,7 @@ interface PlotViewerProps {
 }
 
 export function PlotViewer({ html, onClose }: PlotViewerProps) {
-  const srcDoc = `<!doctype html><html><head><style>body{margin:0;background:transparent;overflow:hidden;}</style></head><body>${html}</body></html>`;
+  const srcDoc = `<!doctype html><html><head><style>body{margin:0;background:transparent;overflow-y:auto;}</style></head><body>${html}</body></html>`;
 
   return (
     <div className="flex flex-col h-full bg-editor rounded border border-border">
@@ -18,7 +18,7 @@ export function PlotViewer({ html, onClose }: PlotViewerProps) {
       </div>
       <iframe
         srcDoc={srcDoc}
-        className="flex-1 w-full bg-transparent"
+        className="flex-1 w-full min-h-[500px] bg-transparent"
         sandbox="allow-scripts"
         title="Plot"
       />
