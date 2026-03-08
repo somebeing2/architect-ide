@@ -1,5 +1,4 @@
-import { useEffect, useRef } from 'react';
-import { X, Maximize2 } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface PlotViewerProps {
   html: string;
@@ -7,23 +6,7 @@ interface PlotViewerProps {
 }
 
 export function PlotViewer({ html, onClose }: PlotViewerProps) {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-
-  useEffect(() => {
-    if (iframeRef.current) {
-      const doc = iframeRef.current.contentDocument;
-      if (doc) {
-        doc.open();
-        doc.write(`
-          <html>
-            <head><style>body { margin: 0; background: transparent; overflow: hidden; }</style></head>
-            <body>${html}</body>
-          </html>
-        `);
-        doc.close();
-      }
-    }
-  }, [html]);
+  const srcDoc = `<!doctype html><html><head><style>body{margin:0;background:transparent;overflow:hidden;}</style></head><body>${html}</body></html>`;
 
   return (
     <div className="flex flex-col h-full bg-editor rounded border border-border">
@@ -34,7 +17,7 @@ export function PlotViewer({ html, onClose }: PlotViewerProps) {
         </button>
       </div>
       <iframe
-        ref={iframeRef}
+        srcDoc={srcDoc}
         className="flex-1 w-full bg-transparent"
         sandbox="allow-scripts"
         title="Plot"
