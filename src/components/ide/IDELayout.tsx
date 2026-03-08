@@ -2,8 +2,8 @@ import { useState, useCallback, useMemo } from 'react';
 import {
   Settings, Github, Cpu, Database,
   ChevronDown, ChevronUp, Sparkles, AlertCircle,
-  Sun, Moon, Activity, LayoutTemplate, BarChart2,
-  Code2, HelpCircle,
+  Activity, LayoutTemplate, BarChart2,
+  Code2, HelpCircle, Palette, Download,
 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { CSVDropzone } from './CSVDropzone';
@@ -22,9 +22,16 @@ import { ProcessingOverlay } from './ProcessingOverlay';
 import { usePyodide } from '@/hooks/usePyodide';
 import { type Template } from '@/lib/templates';
 import { useAppContext } from '@/context/AppContext';
+import { type Theme } from '@/context/AppContext';
 
 const TITANIC_URL =
   'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv';
+
+const THEMES: { value: Theme; label: string }[] = [
+  { value: 'default-dark', label: 'Default Dark' },
+  { value: 'high-contrast', label: 'High Contrast' },
+  { value: 'cyberpunk',     label: 'Cyberpunk' },
+];
 
 export function IDELayout() {
   const {
@@ -34,7 +41,8 @@ export function IDELayout() {
     addHistory,
     plotHtml, setPlotHtml,
     activeMainTab, setActiveMainTab,
-    theme, toggleTheme,
+    theme, setTheme,
+    sessionRestored,
   } = useAppContext();
 
   const [settingsOpen,       setSettingsOpen]       = useState(false);
@@ -50,6 +58,10 @@ export function IDELayout() {
   const [newPlotReady,       setNewPlotReady]        = useState(false);
   // Guided tour in the empty visualizer panel
   const [tourActive,         setTourActive]          = useState(false);
+  // Theme dropdown
+  const [themeMenuOpen,      setThemeMenuOpen]       = useState(false);
+  // Session restored notification (shown once)
+  const [restoredDismissed,  setRestoredDismissed]   = useState(false);
 
   // Row count used by the processing overlay
   const rowCount = useMemo(() => {
@@ -178,11 +190,81 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
     setAiLoading(false);
   }, [aiPrompt, csvData, getCSVSchema, setCode]);
 
+  // ── Export report ─────────────────────────────────────────────────────────
+  const handleDownloadReport = useCallback(() => {
+    if (!plotHtml) return;
+
+    const rowCount = csvData ? csvData.trim().split('\n').length - 1 : 0;
+    const columns  = csvData ? csvData.trim().split('\n')[0] : '';
+    const timestamp = new Date().toLocaleString();
+
+    const reportHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Architect-WASM Report</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #0d1117; color: #e6edf3; margin: 0; padding: 24px; }
+    h1 { font-size: 1.5rem; color: #58a6ff; margin-bottom: 4px; }
+    .meta { font-size: 0.8rem; color: #8b949e; margin-bottom: 24px; }
+    .section { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+    .section h2 { font-size: 1rem; color: #58a6ff; margin: 0 0 12px; }
+    .stat { display: inline-block; background: #21262d; border: 1px solid #30363d; border-radius: 6px; padding: 8px 14px; margin: 4px; font-size: 0.85rem; }
+    .stat strong { color: #e6edf3; }
+    .stat span { color: #8b949e; font-size: 0.75rem; }
+    pre { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 14px; font-size: 0.8rem; color: #e6edf3; overflow-x: auto; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; }
+    .columns { font-size: 0.8rem; color: #8b949e; word-break: break-word; }
+  </style>
+</head>
+<body>
+  <h1>Architect-WASM Report</h1>
+  <div class="meta">Generated: ${timestamp}</div>
+
+  <div class="section">
+    <h2>Data Summary</h2>
+    <div class="stat"><strong>${rowCount}</strong><br/><span>Rows</span></div>
+    <div class="stat"><strong>${columns.split(',').length}</strong><br/><span>Columns</span></div>
+    <div class="columns" style="margin-top:10px;">Columns: ${columns}</div>
+  </div>
+
+  <div class="section">
+    <h2>Visualization</h2>
+    ${plotHtml}
+  </div>
+
+  <div class="section">
+    <h2>Python Code</h2>
+    <pre>${code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+  </div>
+</body>
+</html>`;
+
+    const blob = new Blob([reportHtml], { type: 'text/html' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `architect-report-${Date.now()}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [plotHtml, csvData, code]);
+
   const hasApiKey = !!localStorage.getItem('anthropic_api_key');
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen flex flex-col bg-background overflow-y-auto">
+
+      {/* ── Session restored toast ── */}
+      {sessionRestored && !restoredDismissed && (
+        <div
+          className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-border text-xs text-foreground shadow-lg cursor-pointer"
+          onClick={() => setRestoredDismissed(true)}
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
+          Session restored — click to dismiss
+        </div>
+      )}
 
       {/* ── Title bar ── */}
       <header className="flex items-center justify-between px-4 py-2 bg-card border-b border-border shrink-0">
@@ -235,14 +317,40 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
             <Activity className="w-4 h-4" />
           </button>
 
-          {/* Theme toggle */}
-          <button
-            onClick={toggleTheme}
-            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-            className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-          >
-            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
+          {/* Theme switcher dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setThemeMenuOpen(o => !o)}
+              title="Switch theme"
+              className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              <Palette className="w-4 h-4" />
+            </button>
+            {themeMenuOpen && (
+              <>
+                {/* backdrop to close */}
+                <div
+                  className="fixed inset-0 z-30"
+                  onClick={() => setThemeMenuOpen(false)}
+                />
+                <div className="absolute right-0 mt-1 z-40 w-40 rounded border border-border bg-card shadow-lg py-1">
+                  {THEMES.map(t => (
+                    <button
+                      key={t.value}
+                      onClick={() => { setTheme(t.value); setThemeMenuOpen(false); }}
+                      className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+                        theme === t.value
+                          ? 'text-primary bg-secondary'
+                          : 'text-foreground hover:bg-secondary'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
 
           <button
             onClick={() => setSettingsOpen(true)}
@@ -332,6 +440,18 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
                     </span>
                   )}
                 </button>
+
+                {/* Download Report button — visible when chart is ready in Visualizer tab */}
+                {activeMainTab === 'visualizer' && plotHtml && (
+                  <button
+                    onClick={handleDownloadReport}
+                    title="Download standalone HTML report"
+                    className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors mb-1"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Download Report
+                  </button>
+                )}
               </div>
 
               {/* Visualizer tab */}
