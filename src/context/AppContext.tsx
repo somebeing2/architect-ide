@@ -11,10 +11,14 @@ export interface HistoryEntry {
 
 export type Theme = 'default-dark' | 'high-contrast' | 'cyberpunk';
 
+export type EditorMode = 'python' | 'sql';
+
 interface AppState {
   csvData: string | null;
   csvFileName: string;
   code: string;
+  sqlCode: string;
+  editorMode: EditorMode;
   history: HistoryEntry[];
   plotHtml: string | null;
   activeMainTab: 'editor' | 'visualizer';
@@ -26,6 +30,8 @@ interface AppActions {
   setCsvData: (data: string | null) => void;
   setCsvFileName: (name: string) => void;
   setCode: (code: string) => void;
+  setSqlCode: (code: string) => void;
+  setEditorMode: (mode: EditorMode) => void;
   addHistory: (entry: HistoryEntry) => void;
   deleteHistory: (id: string) => void;
   clearHistory: () => void;
@@ -47,6 +53,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [csvData,         setCsvDataRaw]    = useState<string | null>(null);
   const [csvFileName,     setCsvFileName]   = useState('');
   const [code,            setCodeRaw]       = useState(DEFAULT_CODE);
+  const [sqlCode,         setSqlCode]       = useState('SELECT * FROM data LIMIT 100;');
+  const [editorMode,      setEditorMode]    = useState<EditorMode>('python');
   const [history,         setHistory]       = useState<HistoryEntry[]>([]);
   const [plotHtml,        setPlotHtml]      = useState<string | null>(null);
   const [activeMainTab,   setActiveMainTab] = useState<'editor' | 'visualizer'>('editor');
@@ -152,6 +160,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       csvData, setCsvData,
       csvFileName, setCsvFileName,
       code, setCode,
+      sqlCode, setSqlCode,
+      editorMode, setEditorMode,
       history, addHistory, deleteHistory, clearHistory,
       plotHtml, setPlotHtml,
       activeMainTab, setActiveMainTab,

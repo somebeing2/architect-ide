@@ -164,7 +164,8 @@ except Exception:
     }
   }, [loadPyodide]);
 
-  const clearOutput = useCallback(() => setOutput([]), []);
+  const clearOutput   = useCallback(() => setOutput([]), []);
+  const appendOutput  = useCallback((msg: string) => setOutput(prev => [...prev, msg]), []);
 
-  return { loading, ready, runCode, output, clearOutput, loadPyodide, loadExcel };
+  return { loading, ready, runCode, output, clearOutput, appendOutput, loadPyodide, loadExcel };
 }

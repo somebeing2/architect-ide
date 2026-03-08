@@ -20,6 +20,7 @@ import { SecurityBadge } from './SecurityBadge';
 import { GuidedTour } from './GuidedTour';
 import { ProcessingOverlay } from './ProcessingOverlay';
 import { usePyodide } from '@/hooks/usePyodide';
+import { useDuckDB, formatQueryResult } from '@/hooks/useDuckDB';
 import { type Template } from '@/lib/templates';
 import { useAppContext } from '@/context/AppContext';
 import { type Theme } from '@/context/AppContext';
@@ -38,6 +39,8 @@ export function IDELayout() {
     csvData, setCsvData,
     csvFileName, setCsvFileName,
     code, setCode,
+    sqlCode, setSqlCode,
+    editorMode, setEditorMode,
     addHistory,
     plotHtml, setPlotHtml,
     activeMainTab, setActiveMainTab,
@@ -69,7 +72,8 @@ export function IDELayout() {
     return csvData.trim().split('\n').length - 1;
   }, [csvData]);
 
-  const { output, clearOutput, runCode, loadExcel, loading: pyodideLoading, ready: pyodideReady } = usePyodide();
+  const { output, clearOutput, appendOutput, runCode, loadExcel, loading: pyodideLoading, ready: pyodideReady } = usePyodide();
+  const { loading: duckLoading, ready: duckReady, loadCSV: duckLoadCSV, runSQL } = useDuckDB();
 
   // ── File handlers ────────────────────────────────────────────────────────
   const handleFileLoaded = useCallback((data: string, fileName: string) => {
@@ -132,6 +136,25 @@ export function IDELayout() {
 
     setRunning(false);
   }, [code, csvData, runCode, setPlotHtml, addHistory, activeMainTab]);
+
+  // ── Run SQL via DuckDB ────────────────────────────────────────────────────
+  const handleRunSQL = useCallback(async () => {
+    if (!csvData || !sqlCode.trim()) return;
+    setRunning(true);
+    appendOutput('>>> Running SQL via DuckDB…');
+    try {
+      await duckLoadCSV(csvData);
+      const result = await runSQL(sqlCode);
+      setLastRunMs(result.durationMs);
+      appendOutput(formatQueryResult(result));
+    } catch (err: unknown) {
+      appendOutput(`SQL Error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    setRunning(false);
+  }, [csvData, sqlCode, duckLoadCSV, runSQL, appendOutput]);
+
+  // ── Large-dataset hint (> 500k rows) ─────────────────────────────────────
+  const isLargeDataset = rowCount > 500_000;
 
   // ── Template selection ───────────────────────────────────────────────────
   const handleSelectTemplate = useCallback((template: Template) => {
@@ -536,17 +559,48 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
                     )}
                   </div>
 
+                  {/* Python / SQL mode toggle + large-dataset hint */}
+                  <div className="flex items-center gap-2 px-4 py-1.5 border-b border-border bg-card/30 shrink-0">
+                    <div className="flex rounded overflow-hidden border border-border text-[11px]">
+                      <button
+                        onClick={() => setEditorMode('python')}
+                        className={`px-3 py-1 font-medium transition-colors ${editorMode === 'python' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        Python
+                      </button>
+                      <button
+                        onClick={() => setEditorMode('sql')}
+                        className={`px-3 py-1 font-medium transition-colors ${editorMode === 'sql' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        SQL
+                      </button>
+                    </div>
+                    {editorMode === 'sql' && (
+                      <span className="text-[11px] text-muted-foreground">
+                        DuckDB · table name: <code className="text-primary font-mono">data</code>
+                        {duckLoading && ' · initializing…'}
+                        {duckReady  && ' · ready'}
+                      </span>
+                    )}
+                    {isLargeDataset && editorMode === 'python' && (
+                      <span className="ml-auto text-[11px] text-warning flex items-center gap-1">
+                        ⚡ {rowCount.toLocaleString()} rows — switch to SQL mode for best performance
+                      </span>
+                    )}
+                  </div>
+
                   {/* Code editor + plot viewer */}
                   <div className="flex-1 flex overflow-hidden">
-                    <div className={`${plotHtml ? 'w-1/2' : 'w-full'} flex flex-col overflow-hidden p-2`}>
+                    <div className={`${plotHtml && editorMode === 'python' ? 'w-1/2' : 'w-full'} flex flex-col overflow-hidden p-2`}>
                       <CodeEditor
-                        code={code}
-                        onChange={setCode}
-                        onRun={handleRunCode}
+                        code={editorMode === 'python' ? code : sqlCode}
+                        onChange={editorMode === 'python' ? setCode : setSqlCode}
+                        onRun={editorMode === 'python' ? handleRunCode : handleRunSQL}
                         running={running || pyodideLoading}
+                        title={editorMode === 'python' ? 'analysis.py' : 'query.sql'}
                       />
                     </div>
-                    {plotHtml && (
+                    {plotHtml && editorMode === 'python' && (
                       <div className="w-1/2 flex flex-col overflow-hidden p-2 pl-0">
                         <PlotViewer html={plotHtml} onClose={() => setPlotHtml(null)} />
                       </div>
@@ -579,6 +633,14 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
           <span className={`flex items-center gap-1 ${pyodideLoading ? 'text-warning' : pyodideReady ? 'text-success' : 'text-muted-foreground'}`}>
             <span className="w-1.5 h-1.5 rounded-full bg-current" />
             {pyodideLoading ? 'Loading Pyodide…' : pyodideReady ? 'Pyodide Ready' : 'Pyodide Idle'}
+          </span>
+          {(duckReady || duckLoading) && (
+            <span className={`flex items-center gap-1 ${duckLoading ? 'text-warning' : 'text-success'}`}>
+              <span className="w-1.5 h-1.5 rounded-full bg-current" />
+              {duckLoading ? 'DuckDB loading…' : 'DuckDB Ready'}
+            </span>
+          )}
+          <span className="hidden">{/* dummy to close span below */}
           </span>
           {csvFileName && <span>{csvFileName}</span>}
           {lastRunMs !== undefined && <span>{lastRunMs}ms</span>}
