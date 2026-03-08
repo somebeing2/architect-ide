@@ -50,11 +50,11 @@ export function usePyodide() {
     setOutput(prev => [...prev, '>>> Installing core packages (pandas, micropip)…']);
     await pyodide.loadPackage(['pandas', 'micropip']);
 
-    // Pre-install plotly so templates run instantly without a network fetch
-    setOutput(prev => [...prev, '>>> Installing plotly via micropip…']);
+    // Pre-install plotly and openpyxl so templates and Excel files work instantly
+    setOutput(prev => [...prev, '>>> Installing plotly & openpyxl via micropip…']);
     await pyodide.runPythonAsync(`
 import micropip
-await micropip.install('plotly')
+await micropip.install(['plotly', 'openpyxl'])
 `);
 
     // ── stdout / stderr capture ────────────────────────────────────────────
@@ -83,9 +83,32 @@ sys.stderr = _capture
     pyodideRef.current = pyodide;
     setReady(true);
     setLoading(false);
-    setOutput(prev => [...prev, '>>> Pyodide ready — pandas & plotly loaded. All execution is local (WASM).']);
+    setOutput(prev => [...prev, '>>> Pyodide ready — pandas, plotly & openpyxl loaded. All execution is local (WASM).']);
     return pyodide;
   }, []);
+
+  // ── Excel → CSV conversion via Pyodide ──────────────────────────────────
+  const loadExcel = useCallback(async (buffer: ArrayBuffer): Promise<string> => {
+    const pyodide = await loadPyodide();
+    setOutput(prev => [...prev, '>>> Converting Excel file via pandas…']);
+    try {
+      pyodide.FS.writeFile('/data.xlsx', new Uint8Array(buffer));
+      await pyodide.runPythonAsync(`
+import pandas as pd
+_excel_df = pd.read_excel('/data.xlsx')
+_excel_csv = _excel_df.to_csv(index=False)
+# Also write to /data.csv so analysis code can use read_csv('/data.csv') as usual
+_excel_df.to_csv('/data.csv', index=False)
+`);
+      const csv = (pyodide.globals.get('_excel_csv') as string) || '';
+      setOutput(prev => [...prev, `>>> Excel loaded — ${csv.trim().split('\n').length - 1} rows converted to CSV.`]);
+      return csv;
+    } catch (err: unknown) {
+      const msg = `Error reading Excel: ${err instanceof Error ? err.message : String(err)}`;
+      setOutput(prev => [...prev, msg]);
+      throw new Error(msg);
+    }
+  }, [loadPyodide]);
 
   const runCode = useCallback(async (
     code: string,
@@ -143,5 +166,5 @@ except Exception:
 
   const clearOutput = useCallback(() => setOutput([]), []);
 
-  return { loading, ready, runCode, output, clearOutput, loadPyodide };
+  return { loading, ready, runCode, output, clearOutput, loadPyodide, loadExcel };
 }

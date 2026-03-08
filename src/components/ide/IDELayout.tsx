@@ -69,13 +69,24 @@ export function IDELayout() {
     return csvData.trim().split('\n').length - 1;
   }, [csvData]);
 
-  const { output, clearOutput, runCode, loading: pyodideLoading, ready: pyodideReady } = usePyodide();
+  const { output, clearOutput, runCode, loadExcel, loading: pyodideLoading, ready: pyodideReady } = usePyodide();
 
   // ── File handlers ────────────────────────────────────────────────────────
   const handleFileLoaded = useCallback((data: string, fileName: string) => {
     setCsvData(data);
     setCsvFileName(fileName);
   }, [setCsvData, setCsvFileName]);
+
+  // ── Excel file handler — converts to CSV via Pyodide/pandas ─────────────
+  const handleExcelLoaded = useCallback(async (buffer: ArrayBuffer, fileName: string) => {
+    try {
+      const csv = await loadExcel(buffer);
+      setCsvData(csv);
+      setCsvFileName(fileName);
+    } catch {
+      // error already logged in terminal via usePyodide
+    }
+  }, [loadExcel, setCsvData, setCsvFileName]);
 
   const handleClearFile = useCallback(() => {
     setCsvData(null);
@@ -276,7 +287,7 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
         </div>
 
         <div className="flex items-center gap-1 flex-wrap">
-          <CSVDropzone onFileLoaded={handleFileLoaded} fileName={csvFileName} onClear={handleClearFile} />
+          <CSVDropzone onFileLoaded={handleFileLoaded} onExcelLoaded={handleExcelLoaded} fileName={csvFileName} onClear={handleClearFile} />
 
           {/* Sample data button – only shown when no file is loaded */}
           {!csvFileName && (
@@ -386,7 +397,7 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
                   Client-side data science powered by WebAssembly.
                   Upload a CSV to start analyzing — or load the demo dataset below.
                 </p>
-                <CSVDropzone onFileLoaded={handleFileLoaded} fileName={csvFileName} onClear={handleClearFile} />
+                <CSVDropzone onFileLoaded={handleFileLoaded} onExcelLoaded={handleExcelLoaded} fileName={csvFileName} onClear={handleClearFile} />
 
                 <div className="flex items-center gap-3 mt-5 mb-1">
                   <div className="flex-1 h-px bg-border" />

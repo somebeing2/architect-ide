@@ -3,27 +3,45 @@ import { Upload, FileSpreadsheet, X } from 'lucide-react';
 
 interface CSVDropzoneProps {
   onFileLoaded: (data: string, fileName: string) => void;
+  onExcelLoaded?: (buffer: ArrayBuffer, fileName: string) => void;
   fileName?: string;
   onClear: () => void;
 }
 
-export function CSVDropzone({ onFileLoaded, fileName, onClear }: CSVDropzoneProps) {
+const EXCEL_EXTS = ['.xlsx', '.xls'];
+
+function isExcel(name: string) {
+  return EXCEL_EXTS.some(ext => name.toLowerCase().endsWith(ext));
+}
+
+export function CSVDropzone({ onFileLoaded, onExcelLoaded, fileName, onClear }: CSVDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleFile = useCallback((file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      onFileLoaded(text, file.name);
-    };
-    reader.readAsText(file);
-  }, [onFileLoaded]);
+    if (isExcel(file.name)) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const buffer = e.target?.result as ArrayBuffer;
+        onExcelLoaded?.(buffer, file.name);
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        onFileLoaded(text, file.name);
+      };
+      reader.readAsText(file);
+    }
+  }, [onFileLoaded, onExcelLoaded]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
-    if (file?.name.endsWith('.csv')) handleFile(file);
+    if (file && (file.name.endsWith('.csv') || isExcel(file.name))) {
+      handleFile(file);
+    }
   }, [handleFile]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -50,18 +68,18 @@ export function CSVDropzone({ onFileLoaded, fileName, onClear }: CSVDropzoneProp
       onDrop={handleDrop}
       className={`
         flex flex-col items-center justify-center gap-3 p-8 rounded-lg border-2 border-dashed cursor-pointer transition-all duration-200
-        ${isDragging 
-          ? 'border-primary bg-dropzone-bg/10 animate-pulse-glow' 
+        ${isDragging
+          ? 'border-primary bg-dropzone-bg/10 animate-pulse-glow'
           : 'border-border hover:border-primary/50 hover:bg-secondary/50'
         }
       `}
     >
       <Upload className={`w-10 h-10 ${isDragging ? 'text-primary' : 'text-muted-foreground'} transition-colors`} />
       <div className="text-center">
-        <p className="text-sm font-medium text-foreground">Drop CSV here or click to browse</p>
-        <p className="text-xs text-muted-foreground mt-1">Supports .csv files</p>
+        <p className="text-sm font-medium text-foreground">Drop file here or click to browse</p>
+        <p className="text-xs text-muted-foreground mt-1">Supports .csv, .xlsx, .xls</p>
       </div>
-      <input type="file" accept=".csv" onChange={handleInputChange} className="hidden" />
+      <input type="file" accept=".csv,.xlsx,.xls" onChange={handleInputChange} className="hidden" />
     </label>
   );
 }
