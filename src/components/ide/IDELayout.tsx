@@ -1,10 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   Settings, Github, Cpu, Database,
   ChevronDown, ChevronUp, Sparkles, AlertCircle,
   Sun, Moon, Activity, LayoutTemplate, BarChart2,
-  Code2,
+  Code2, HelpCircle,
 } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
 import { CSVDropzone } from './CSVDropzone';
 import { DataPreview } from './DataPreview';
 import { CodeEditor } from './CodeEditor';
@@ -16,6 +17,8 @@ import { TemplateGallery } from './TemplateGallery';
 import { SystemHealthDrawer } from './SystemHealthDrawer';
 import { VisualBuilder } from './VisualBuilder';
 import { SecurityBadge } from './SecurityBadge';
+import { GuidedTour } from './GuidedTour';
+import { ProcessingOverlay } from './ProcessingOverlay';
 import { usePyodide } from '@/hooks/usePyodide';
 import { type Template } from '@/lib/templates';
 import { useAppContext } from '@/context/AppContext';
@@ -43,6 +46,16 @@ export function IDELayout() {
   const [aiLoading,          setAiLoading]           = useState(false);
   const [titanicLoading,     setTitanicLoading]      = useState(false);
   const [lastRunMs,          setLastRunMs]           = useState<number | undefined>();
+  // Glowing dot: chart was produced while on the Editor tab
+  const [newPlotReady,       setNewPlotReady]        = useState(false);
+  // Guided tour in the empty visualizer panel
+  const [tourActive,         setTourActive]          = useState(false);
+
+  // Row count used by the processing overlay
+  const rowCount = useMemo(() => {
+    if (!csvData) return 0;
+    return csvData.trim().split('\n').length - 1;
+  }, [csvData]);
 
   const { output, clearOutput, runCode, loading: pyodideLoading, ready: pyodideReady } = usePyodide();
 
@@ -81,7 +94,11 @@ export function IDELayout() {
     const ms = Math.round(performance.now() - t0);
     setLastRunMs(ms);
 
-    if (result.plotHtml) setPlotHtml(result.plotHtml);
+    if (result.plotHtml) {
+      setPlotHtml(result.plotHtml);
+      // If the user is on the Editor tab, light up the Visualizer tab notification dot
+      if (activeMainTab === 'editor') setNewPlotReady(true);
+    }
 
     addHistory({
       id       : Date.now().toString(),
@@ -91,7 +108,7 @@ export function IDELayout() {
     });
 
     setRunning(false);
-  }, [code, csvData, runCode, setPlotHtml, addHistory]);
+  }, [code, csvData, runCode, setPlotHtml, addHistory, activeMainTab]);
 
   // ── Template selection ───────────────────────────────────────────────────
   const handleSelectTemplate = useCallback((template: Template) => {
@@ -299,14 +316,21 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
                   <Code2 className="w-3.5 h-3.5" /> Editor
                 </button>
                 <button
-                  onClick={() => setActiveMainTab('visualizer')}
-                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-all ${
+                  onClick={() => { setActiveMainTab('visualizer'); setNewPlotReady(false); }}
+                  className={`relative flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-all ${
                     activeMainTab === 'visualizer'
                       ? 'border-primary text-primary'
                       : 'border-transparent text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   <BarChart2 className="w-3.5 h-3.5" /> Visualizer
+                  {/* Glowing notification dot — chart ready but user is on Editor tab */}
+                  {newPlotReady && activeMainTab !== 'visualizer' && (
+                    <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-accent" />
+                    </span>
+                  )}
                 </button>
               </div>
 
@@ -320,14 +344,27 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
                       onSwitchToEditor={() => setActiveMainTab('editor')}
                     />
                   </div>
-                  <div className="flex-1 overflow-hidden p-2">
+                  <div className="flex-1 overflow-hidden p-2 relative">
                     {plotHtml ? (
                       <PlotViewer html={plotHtml} onClose={() => setPlotHtml(null)} />
                     ) : (
-                      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                      <div className="relative flex flex-col items-center justify-center h-full text-muted-foreground">
                         <BarChart2 className="w-12 h-12 mb-3 opacity-20" />
                         <p className="text-sm">Configure and generate a chart</p>
                         <p className="text-[11px] mt-1 opacity-60">Use the builder on the left</p>
+                        <button
+                          onClick={() => setTourActive(true)}
+                          className="mt-4 flex items-center gap-1.5 text-[11px] text-primary hover:text-primary/80 transition-colors"
+                        >
+                          <HelpCircle className="w-3.5 h-3.5" />
+                          How do I see my chart?
+                        </button>
+                        {/* 5-second guided tour overlay */}
+                        <AnimatePresence>
+                          {tourActive && (
+                            <GuidedTour onClose={() => setTourActive(false)} />
+                          )}
+                        </AnimatePresence>
                       </div>
                     )}
                   </div>
@@ -438,6 +475,9 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
         pyodideLoading={pyodideLoading}
         lastRunMs={lastRunMs}
       />
+
+      {/* Processing overlay — pill at bottom of screen while WASM is running */}
+      <ProcessingOverlay running={running} rowCount={rowCount} />
     </div>
   );
 }

@@ -107,12 +107,20 @@ sys.stderr = _capture
       await pyodide.runPythonAsync(wrappedCode);
       const capturedOutput = (pyodide.globals.get('_output') as string) || '';
 
-      // Extract Plotly figure HTML if the user assigned one to `_fig`
+      // Auto-detect any plotly Figure in the user's scope — no need to name it `_fig`
       let plotHtml: string | undefined;
       try {
         await pyodide.runPythonAsync(`
 try:
-    _plot_html = _fig.to_html(include_plotlyjs='cdn', full_html=False) if '_fig' in dir() else ''
+    import plotly.graph_objects as _go_cls
+    # Scan all globals for Figure instances; prefer explicit _fig, else take the last one found
+    _fig_candidates = [v for v in list(globals().values()) if isinstance(v, _go_cls.Figure)]
+    if '_fig' in globals() and isinstance(globals()['_fig'], _go_cls.Figure):
+        _plot_html = globals()['_fig'].to_html(include_plotlyjs='cdn', full_html=False)
+    elif _fig_candidates:
+        _plot_html = _fig_candidates[-1].to_html(include_plotlyjs='cdn', full_html=False)
+    else:
+        _plot_html = ''
 except Exception:
     _plot_html = ''
 `);
