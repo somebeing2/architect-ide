@@ -63,9 +63,9 @@ function buildCode(
     const aggFunc = agg.toLowerCase();
     lines.push(`# Aggregate data`);
     if (colorCol) {
-      lines.push(`agg_df = df.groupby(['${xCol}', '${colorCol}'])['${yCol}'].${aggFunc}().reset_index()`);
+      lines.push(`agg_df = df.groupby(['${xCol}', '${colorCol}'], as_index=False)['${yCol}'].${aggFunc}()`);
     } else {
-      lines.push(`agg_df = df.groupby('${xCol}')['${yCol}'].${aggFunc}().reset_index()`);
+      lines.push(`agg_df = df.groupby('${xCol}', as_index=False)['${yCol}'].${aggFunc}()`);
     }
     lines.push(`df = agg_df`);
     lines.push(``);
