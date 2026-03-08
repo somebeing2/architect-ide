@@ -76,13 +76,27 @@ One-click **Titanic dataset** loader (891 rows) for instant demos — no file re
 
 ---
 
-## Getting Started (local dev)
+## 🛠️ Local Setup Instructions
 
-```bash
-npm install
-npm run dev        # http://localhost:8080
-npm run build      # production build → dist/
-```
+To run **Architect-WASM** on your own machine, follow these steps:
+
+1. **Clone the Repository**
+   ```bash
+   git clone https://github.com/somebeing2/architect-ide.git
+   cd architect-ide
+   ```
+
+2. **Install Dependencies**
+   > Requires **Node.js v18 or higher**
+   ```bash
+   npm install
+   ```
+
+3. **Start the Development Server**
+   ```bash
+   npm run dev
+   ```
+   The app will be available at `http://localhost:8080`.
 
 ---
 
