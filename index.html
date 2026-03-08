@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Architect-WASM | Client-Side Data Science IDE</title>
+    <meta name="description" content="A professional, browser-based data science IDE powered by WebAssembly. Run Python, Pandas, and Plotly entirely client-side." />
+    <meta name="author" content="Lovable" />
+    <meta property="og:title" content="Architect-WASM" />
+    <meta property="og:description" content="Client-side data science IDE powered by WebAssembly" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@Lovable" />
+    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+  <!-- GitHub Pages SPA: restore path encoded by 404.html -->
+  <script>
+    (function() {
+      var params = new URLSearchParams(window.location.search);
+      var p = params.get('p');
+      if (p) {
+        params.delete('p');
+        var remaining = params.toString();
+        var newUrl = window.location.pathname +
+          (remaining ? '?' + remaining : '') +
+          decodeURIComponent(p.split('?')[0]) +
+          (p.indexOf('?') !== -1 ? '?' + decodeURIComponent(p.split('?')[1]) : '');
+        window.history.replaceState(null, '', newUrl);
+      }
+    })();
+  </script>
+  <!-- Prism.js: Python syntax highlighting for the code editor -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+    <script type="module" crossorigin src="/architect-ide/assets/index-CmlSdMe6.js"></script>
+    <link rel="stylesheet" crossorigin href="/architect-ide/assets/index-CSwQ9TqS.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

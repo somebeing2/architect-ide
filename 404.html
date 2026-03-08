@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Architect-WASM</title>
+    <script>
+      // GitHub Pages SPA redirect trick.
+      // Encode the full path/query/hash into a ?p= parameter and redirect to the root.
+      var l = window.location;
+      var base = '/architect-ide';
+      var path = l.pathname.slice(base.length) + l.search + l.hash;
+      l.replace(
+        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+        base + '/?p=' + encodeURIComponent(path)
+      );
+    </script>
+  </head>
+  <body></body>
+</html>
