@@ -117,23 +117,33 @@ This project was built entirely using **Claude Sonnet** as the sole engineering 
 
 Every feature, bug fix, deployment configuration, and architectural decision was implemented within this single budget window — from first commit to live GitHub Pages deployment.
 
-### Architectural Milestone: Dual-Engine WASM
+### Architectural Milestone: Tri-Engine WASM
 
-The final architecture runs **two WebAssembly engines simultaneously in the browser**:
+The final architecture runs **three distinct WebAssembly engines simultaneously in the browser**, connected via dedicated `MessageChannel` Web Workers:
 
 | Engine | Role |
 |---|---|
-| **Pyodide (Python 3.11)** | Standard analysis — pandas, plotly, openpyxl, template gallery, AI code generation |
-| **DuckDB-WASM** | Large dataset SQL engine — lazy-loaded from CDN, handles million-row queries without crashing the browser |
+| **Pyodide (Python 3.11)** | Standard analysis, `pandas`, `plotly`, `micropip` AI code generation. Visualizations are processed off-thread via `OffscreenCanvas`. |
+| **WebR (R Language)** | Statistical computing, base R plotting, package management. Fully isolated in its own Web Worker. |
+| **DuckDB-WASM** | Heavy-duty SQL analytics engine. Capable of millions of rows of analytical aggregations in milliseconds. |
 
-Files flow through a unified pipeline: CSV or Excel upload → IndexedDB persistence → Pyodide virtual FS for Python mode, or DuckDB `data` table for SQL mode. Both engines run entirely client-side with zero data leaving the device.
+**Zero-Copy Semantic Bridge (Arrow IPC)**
+Instead of relying on the main React thread or string serialization (CSV/JSON) to pass data between these languages, Architect-WASM features a **Universal Join**. 
+When a user clicks "Export to SQL" in either Python or R:
+1. The respective Web Worker natively encodes its DataFrame environment variable into an **Apache Arrow RecordBatch buffer** (`Uint8Array`).
+2. This binary buffer is transmitted directly over a `MessagePort` to the DuckDB Worker, entirely bypassing the main UI thread.
+3. DuckDB dynamically mounts the buffer via `db.registerFileBuffer(tableName)` and creates a zero-copy virtual view.
+4. Users can instantly run cross-language joins natively in the browser: `SELECT * FROM python_data JOIN r_data ON id;`.
+
+**Progressive Web App (PWA) Offline-First Strategy**
+Architect-WASM is a fully installable PWA. Due to the massive size of the underlying WASM engines, our Service Worker (via `Workbox`) is specifically configured with a 100MB cache limit to aggressively pre-cache and store the `pyodide.wasm`, `duckdb.wasm`, and `webr.wasm` binaries on the user's local disk. Once the application loads once, subsequent launches are near-instant and operate flawlessly without an internet connection.
 
 ### Elite Sprint: Premium Features
 
-Added during the final engineering sprint with the remaining budget:
+Added during the final engineering sprint:
 
-- **IndexedDB Persistence** — CSV data and Python scripts auto-saved and restored on page refresh via `idb-keyval`; no session loss on reload
-- **Virtual Scrolling** — `react-window` `FixedSizeList` powers the data preview table; renders 10,000+ row datasets at 60fps with no DOM bloat
+- **IndexedDB Persistence** — CSV data and scripts auto-saved and restored on page refresh via `idb-keyval`; no session loss on reload
+- **Virtual Scrolling** — `react-window` powers the data preview table; renders 10,000+ row datasets at 60fps with no DOM bloat
 - **Interactive HTML Report Export** — one-click download of a fully self-contained HTML file containing the Plotly chart, data summary, Python code, and timestamp
 - **Triple-Theme Engine** — Default Dark, High Contrast, and Cyberpunk (neon accents) themes with live switching via a Palette dropdown; preference persisted across sessions
 
