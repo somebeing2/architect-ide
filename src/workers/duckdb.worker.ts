@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 import * as duckdb from '@duckdb/duckdb-wasm';
+import type { ArrowPayload } from '../utils/engineBridge';
 
 let db: duckdb.AsyncDuckDB | null = null;
 let conn: duckdb.AsyncDuckDBConnection | null = null;
@@ -35,14 +36,15 @@ self.onmessage = async (e: MessageEvent) => {
   else if (type === 'SET_PORT') {
     const port = e.ports[0];
     port.onmessage = async (msg) => {
-      if (msg.data.type === 'ARROW_DATA' && db && conn) {
-        // We received Arrow IPC buffer directly from Pyodide!
+      const payload = msg.data as ArrowPayload;
+      if (payload.type === 'ARROW_DATA' && db && conn) {
+        // We received Arrow IPC buffer from Pyodide or R!
         try {
-          const { name, buffer } = msg.data;
-          await db.registerFileBuffer(name + '.recordbatch', buffer);
-          await conn.query(`DROP TABLE IF EXISTS ${name}`);
-          await conn.query(`CREATE TABLE ${name} AS SELECT * FROM read_ipc('${name}.recordbatch')`);
-          self.postMessage({ type: 'ARROW_LOADED' });
+          const { tableName, buffer, source } = payload;
+          await db.registerFileBuffer(tableName + '.recordbatch', buffer);
+          await conn.query(`DROP TABLE IF EXISTS ${tableName}`);
+          await conn.query(`CREATE TABLE ${tableName} AS SELECT * FROM read_ipc('${tableName}.recordbatch')`);
+          self.postMessage({ type: 'ARROW_LOADED', tableName, source });
         } catch (err: any) {
           self.postMessage({ type: 'ERROR', error: 'Arrow Load Error: ' + err.message });
         }

@@ -64,6 +64,7 @@ export function usePyodide() {
   const runCode = useCallback(async (
     code: string,
     csvData?: string,
+    exportTableName?: string,
   ): Promise<{ output: string; plotHtml?: string }> => {
     const worker = await loadPyodide();
 
@@ -78,12 +79,19 @@ export function usePyodide() {
         }
       };
       worker.addEventListener('message', handler);
-      worker.postMessage({ type: 'RUN_CODE', payload: { code, csvData } });
+      worker.postMessage({ type: 'RUN_CODE', payload: { code, csvData, exportTableName } });
     });
+  }, [loadPyodide]);
+
+  const exportToSQL = useCallback(async (tableName: string) => {
+    const worker = await loadPyodide();
+    // This empty code block triggers the auto-export logic inside the worker 
+    // without running a new visible script.
+    worker.postMessage({ type: 'RUN_CODE', payload: { code: 'pass', exportTableName: tableName } });
   }, [loadPyodide]);
 
   const clearOutput   = useCallback(() => setOutput([]), []);
   const appendOutput  = useCallback((msg: string) => setOutput(prev => [...prev, msg]), []);
 
-  return { loading, ready, runCode, output, clearOutput, appendOutput, loadPyodide, loadExcel, configPort };
+  return { loading, ready, runCode, output, clearOutput, appendOutput, loadPyodide, loadExcel, configPort, exportToSQL };
 }

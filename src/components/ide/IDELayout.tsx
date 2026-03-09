@@ -74,8 +74,8 @@ export function IDELayout() {
     return csvData.trim().split('\n').length - 1;
   }, [csvData]);
 
-  const { output: pyOutput, clearOutput: clearPy, appendOutput: appendPy, runCode: runPy, loadExcel, loading: pyodideLoading, ready: pyodideReady, configPort: configPyPort, loadPyodide } = usePyodide();
-  const { output: rOutput, clearOutput: clearR, appendOutput: appendR, runCode: runR, loading: webrLoading, ready: webrReady, configPort: configWebRPort, loadWebR } = useWebR();
+  const { output: pyOutput, clearOutput: clearPy, appendOutput: appendPy, runCode: runPy, loadExcel, loading: pyodideLoading, ready: pyodideReady, configPort: configPyPort, loadPyodide, exportToSQL: pyExportToSQL } = usePyodide();
+  const { output: rOutput, clearOutput: clearR, appendOutput: appendR, runCode: runR, loading: webrLoading, ready: webrReady, configPort: configWebRPort, loadWebR, exportToSQL: rExportToSQL } = useWebR();
   const { loading: duckLoading, ready: duckReady, loadCSV: duckLoadCSV, runSQL, initDB } = useDuckDB();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const workersLinked = useRef(false);
@@ -178,11 +178,11 @@ export function IDELayout() {
 
   // ── Run SQL via DuckDB ────────────────────────────────────────────────────
   const handleRunSQL = useCallback(async () => {
-    if (!csvData || !sqlCode.trim()) return;
+    if (!sqlCode.trim()) return;
     setRunning(true);
     activeAppendOutput('>>> Running SQL via DuckDB…');
     try {
-      await duckLoadCSV(csvData);
+      if (csvData) await duckLoadCSV(csvData);
       const result = await runSQL(sqlCode);
       setLastRunMs(result.durationMs);
       activeAppendOutput(formatQueryResult(result));
@@ -191,6 +191,17 @@ export function IDELayout() {
     }
     setRunning(false);
   }, [csvData, sqlCode, duckLoadCSV, runSQL, activeAppendOutput]);
+
+  // ── Export to SQL ────────────────────────────────────────────────────────
+  const handleExportToSQL = useCallback(async () => {
+    if (editorMode === 'python') {
+      activeAppendOutput('>>> Exporting Python `data` to SQL table `python_data`...');
+      await pyExportToSQL('python_data');
+    } else if (editorMode === 'r') {
+      activeAppendOutput('>>> Exporting R `data` to SQL table `r_data`...');
+      await rExportToSQL('r_data');
+    }
+  }, [editorMode, pyExportToSQL, rExportToSQL, activeAppendOutput]);
 
   // ── Large-dataset hint (> 500k rows) ─────────────────────────────────────
   const isLargeDataset = rowCount > 500_000;
@@ -622,7 +633,7 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
                     </div>
                     {editorMode === 'sql' && (
                       <span className="text-[11px] text-muted-foreground">
-                        DuckDB · table name: <code className="text-primary font-mono">data</code>
+                        DuckDB · table name: <code className="text-primary font-mono">data</code> (or <code className="text-primary font-mono">python_data</code>, <code className="text-primary font-mono">r_data</code>)
                         {duckLoading && ' · initializing…'}
                         {duckReady  && ' · ready'}
                       </span>
@@ -631,6 +642,15 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
                       <span className="ml-auto text-[11px] text-warning flex items-center gap-1">
                         ⚡ {rowCount.toLocaleString()} rows — switch to SQL mode for best performance
                       </span>
+                    )}
+                    {(editorMode === 'python' || editorMode === 'r') && (
+                      <button
+                        onClick={handleExportToSQL}
+                        className="ml-auto flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                        title="Exports the current 'data' dataframe to DuckDB via Arrow"
+                      >
+                        <Database className="w-3.5 h-3.5" /> Export to SQL
+                      </button>
                     )}
                   </div>
 

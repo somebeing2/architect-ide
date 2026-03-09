@@ -47,6 +47,7 @@ export function useWebR() {
   const runCode = useCallback(async (
     code: string,
     csvData?: string,
+    exportTableName?: string,
   ): Promise<{ output: string; plotHtml?: string }> => {
     const worker = await loadWebR();
 
@@ -61,12 +62,17 @@ export function useWebR() {
         }
       };
       worker.addEventListener('message', handler);
-      worker.postMessage({ type: 'RUN_CODE', payload: { code, csvData } });
+      worker.postMessage({ type: 'RUN_CODE', payload: { code, csvData, exportTableName } });
     });
+  }, [loadWebR]);
+
+  const exportToSQL = useCallback(async (tableName: string) => {
+    const worker = await loadWebR();
+    worker.postMessage({ type: 'RUN_CODE', payload: { code: 'invisible()', exportTableName: tableName } });
   }, [loadWebR]);
 
   const clearOutput   = useCallback(() => setOutput([]), []);
   const appendOutput  = useCallback((msg: string) => setOutput(prev => [...prev, msg]), []);
 
-  return { loading, ready, runCode, output, clearOutput, appendOutput, loadWebR, configPort };
+  return { loading, ready, runCode, output, clearOutput, appendOutput, loadWebR, configPort, exportToSQL };
 }

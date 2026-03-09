@@ -87,7 +87,8 @@ _arrow_buffer = sink.getvalue().to_pybytes()
         // Send to DuckDB worker via MessageChannel
         duckDbPort.postMessage({
           type: 'ARROW_DATA',
-          name: 'data',
+          source: 'python',
+          tableName: 'data',
           buffer: uint8Array
         }, [uint8Array.buffer]);
       }
@@ -145,7 +146,8 @@ except Exception:
           const uint8Array = new Uint8Array(outArrow);
           duckDbPort.postMessage({
             type: 'ARROW_DATA',
-            name: 'data',
+            source: 'python',
+            tableName: payload.exportTableName || 'python_data',
             buffer: uint8Array
           }, [uint8Array.buffer]);
           outArrow.destroy();
