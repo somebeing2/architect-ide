@@ -113,7 +113,7 @@ This project was built entirely using **Claude Sonnet** as the sole engineering 
 | Remaining Balance | $0.84 |
 | Tokens Processed | 32,000,000+ |
 | Commits to Production | 25+ |
-| Lines of Code Delivered | 3,500+ |
+| Lines of Code Delivered | 7850+|
 
 Every feature, bug fix, deployment configuration, and architectural decision was implemented within this single budget window — from first commit to live GitHub Pages deployment.
 
