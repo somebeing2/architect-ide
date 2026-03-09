@@ -7,10 +7,16 @@ export interface QueryResult {
   durationMs: number;
 }
 
+export interface ActiveTable {
+  tableName: string;
+  source: 'python' | 'r' | 'csv';
+}
+
 export function useDuckDB() {
   const [loading,  setLoading]  = useState(false);
   const [ready,    setReady]    = useState(false);
   const [error,    setError]    = useState<string | null>(null);
+  const [activeTables, setActiveTables] = useState<ActiveTable[]>([]);
   const workerRef = useRef<Worker | null>(null);
   const pyodidePortRef = useRef<MessagePort | null>(null);
   const webrPortRef = useRef<MessagePort | null>(null);
@@ -39,6 +45,11 @@ export function useDuckDB() {
           setReady(true);
           setLoading(false);
           resolve({ worker, pyodidePort: pyodidePortRef.current, webrPort: webrPortRef.current });
+        } else if (e.data.type === 'ARROW_LOADED') {
+          setActiveTables(prev => {
+            const temp = prev.filter(t => t.tableName !== e.data.tableName);
+            return [...temp, { tableName: e.data.tableName, source: e.data.source }];
+          });
         } else if (e.data.type === 'ERROR') {
           setError(e.data.error);
           setLoading(false);
@@ -57,7 +68,13 @@ export function useDuckDB() {
       const handler = (e: MessageEvent) => {
         if (e.data.id === id) {
           worker.removeEventListener('message', handler);
-          if (e.data.type === 'CSV_LOADED') resolve();
+          if (e.data.type === 'CSV_LOADED') {
+            setActiveTables(prev => {
+              if (prev.find(t => t.tableName === 'data')) return prev;
+              return [...prev, { tableName: 'data', source: 'csv' }];
+            });
+            resolve();
+          }
           else if (e.data.type === 'ERROR') reject(new Error(e.data.error));
         }
       };
@@ -84,7 +101,7 @@ export function useDuckDB() {
     });
   }, [initDB]);
 
-  return { loading, ready, error, initDB, loadCSV, runSQL };
+  return { loading, ready, error, initDB, loadCSV, runSQL, activeTables };
 }
 
 export function formatQueryResult({ columns, rows, rowCount, durationMs }: QueryResult): string {

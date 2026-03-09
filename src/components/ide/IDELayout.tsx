@@ -13,6 +13,7 @@ import { Terminal } from './Terminal';
 import { PlotViewer } from './PlotViewer';
 import { SettingsModal } from './SettingsModal';
 import { HistorySidebar } from './HistorySidebar';
+import { ActiveTablesSidebar } from './ActiveTablesSidebar';
 import { TemplateGallery } from './TemplateGallery';
 import { SystemHealthDrawer } from './SystemHealthDrawer';
 import { VisualBuilder } from './VisualBuilder';
@@ -76,7 +77,7 @@ export function IDELayout() {
 
   const { output: pyOutput, clearOutput: clearPy, appendOutput: appendPy, runCode: runPy, loadExcel, loading: pyodideLoading, ready: pyodideReady, configPort: configPyPort, loadPyodide, exportToSQL: pyExportToSQL } = usePyodide();
   const { output: rOutput, clearOutput: clearR, appendOutput: appendR, runCode: runR, loading: webrLoading, ready: webrReady, configPort: configWebRPort, loadWebR, exportToSQL: rExportToSQL } = useWebR();
-  const { loading: duckLoading, ready: duckReady, loadCSV: duckLoadCSV, runSQL, initDB } = useDuckDB();
+  const { loading: duckLoading, ready: duckReady, loadCSV: duckLoadCSV, runSQL, initDB, activeTables } = useDuckDB();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const workersLinked = useRef(false);
 
@@ -449,8 +450,13 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
       <div className="flex flex-1 overflow-hidden">
 
         {/* Sidebar */}
-        <aside className="w-56 shrink-0 bg-sidebar border-r border-border overflow-hidden sidebar-collapse tablet-narrow">
-          <HistorySidebar />
+        <aside className="w-56 shrink-0 bg-sidebar border-r border-border overflow-hidden sidebar-collapse tablet-narrow flex flex-col">
+          <div className="flex-1 min-h-0">
+            <HistorySidebar />
+          </div>
+          <div className="h-2/5 border-t border-border shrink-0">
+            <ActiveTablesSidebar tables={activeTables} />
+          </div>
         </aside>
 
         {/* Editor + preview area */}
