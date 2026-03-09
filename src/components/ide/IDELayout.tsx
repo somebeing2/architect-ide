@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   Settings, Github, Cpu, Database,
   ChevronDown, ChevronUp, Sparkles, AlertCircle,
@@ -72,8 +72,31 @@ export function IDELayout() {
     return csvData.trim().split('\n').length - 1;
   }, [csvData]);
 
-  const { output, clearOutput, appendOutput, runCode, loadExcel, loading: pyodideLoading, ready: pyodideReady } = usePyodide();
-  const { loading: duckLoading, ready: duckReady, loadCSV: duckLoadCSV, runSQL } = useDuckDB();
+  const { output, clearOutput, appendOutput, runCode, loadExcel, loading: pyodideLoading, ready: pyodideReady, configPort, loadPyodide } = usePyodide();
+  const { loading: duckLoading, ready: duckReady, loadCSV: duckLoadCSV, runSQL, initDB } = useDuckDB();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const workersLinked = useRef(false);
+
+  // ── Initialize and link workers securely off-thread ────────────────────
+  useEffect(() => {
+    async function setupWorkers() {
+      if (workersLinked.current) return;
+      workersLinked.current = true;
+      try {
+        const { pyodidePort } = await initDB();
+        await configPort(pyodidePort);
+        
+        if (canvasRef.current && 'transferControlToOffscreen' in canvasRef.current) {
+          const offscreen = canvasRef.current.transferControlToOffscreen();
+          const pWorker = await loadPyodide();
+          pWorker.postMessage({ type: 'SET_CANVAS', canvas: offscreen }, [offscreen]);
+        }
+      } catch (err) {
+        console.error("Failed to link workers:", err);
+      }
+    }
+    setupWorkers();
+  }, [initDB, configPort, loadPyodide]);
 
   // ── File handlers ────────────────────────────────────────────────────────
   const handleFileLoaded = useCallback((data: string, fileName: string) => {
@@ -668,6 +691,9 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
         pyodideLoading={pyodideLoading}
         lastRunMs={lastRunMs}
       />
+
+      {/* Hidden canvas for Pyodide OffscreenCanvas background rendering */}
+      <canvas ref={canvasRef} style={{ display: 'none' }} width={800} height={600} />
 
       {/* Processing overlay — pill at bottom of screen while WASM is running */}
       <ProcessingOverlay running={running} rowCount={rowCount} />
