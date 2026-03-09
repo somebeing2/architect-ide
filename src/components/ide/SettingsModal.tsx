@@ -8,6 +8,8 @@ interface SettingsModalProps {
 
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [apiKey, setApiKey] = useState('');
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -27,6 +29,36 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const handleClear = () => {
     localStorage.removeItem('anthropic_api_key');
     setApiKey('');
+  };
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      // Prevent the mini-infobar from appearing on mobile
+      e.preventDefault();
+      // Stash the event so it can be triggered later.
+      setDeferredPrompt(e);
+      // Update UI notify the user they can install the PWA
+      setIsInstallable(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    // Show the install prompt
+    deferredPrompt.prompt();
+    // Wait for the user to respond to the prompt
+    const { outcome } = await deferredPrompt.userChoice;
+    // We've used the prompt, and can't use it again, throw it away
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+      setIsInstallable(false);
+    }
   };
 
   if (!open) return null;
@@ -63,6 +95,23 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               <Trash2 className="w-3.5 h-3.5" /> Clear
             </button>
           </div>
+
+          {isInstallable && (
+            <div className="mt-6 pt-4 border-t border-border">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
+                Offline PWA
+              </label>
+              <p className="text-[11px] text-muted-foreground mb-3">
+                Install Architect-WASM locally. Heavy WASM engines (DuckDB/Pyodide) will be cached for instant, zero-latency loading entirely offline.
+              </p>
+              <button
+                onClick={handleInstallClick}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded border border-primary text-primary text-xs font-medium hover:bg-primary/10 transition-colors"
+              >
+                Install Local App
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
