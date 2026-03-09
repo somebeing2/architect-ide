@@ -13,10 +13,11 @@ export function useDuckDB() {
   const [error,    setError]    = useState<string | null>(null);
   const workerRef = useRef<Worker | null>(null);
   const pyodidePortRef = useRef<MessagePort | null>(null);
+  const webrPortRef = useRef<MessagePort | null>(null);
 
-  const initDB = useCallback(async (): Promise<{ worker: Worker, pyodidePort: MessagePort }> => {
-    if (workerRef.current && pyodidePortRef.current) {
-      return { worker: workerRef.current, pyodidePort: pyodidePortRef.current };
+  const initDB = useCallback(async (): Promise<{ worker: Worker, pyodidePort: MessagePort, webrPort: MessagePort }> => {
+    if (workerRef.current && pyodidePortRef.current && webrPortRef.current) {
+      return { worker: workerRef.current, pyodidePort: pyodidePortRef.current, webrPort: webrPortRef.current };
     }
     setLoading(true);
     setError(null);
@@ -27,13 +28,17 @@ export function useDuckDB() {
 
       worker.onmessage = (e) => {
         if (e.data.type === 'READY') {
-          const channel = new MessageChannel();
-          pyodidePortRef.current = channel.port1;
-          worker.postMessage({ type: 'SET_PORT' }, [channel.port2]);
+          const pyChannel = new MessageChannel();
+          pyodidePortRef.current = pyChannel.port1;
+          worker.postMessage({ type: 'SET_PORT' }, [pyChannel.port2]);
+
+          const rChannel = new MessageChannel();
+          webrPortRef.current = rChannel.port1;
+          worker.postMessage({ type: 'SET_PORT' }, [rChannel.port2]);
           
           setReady(true);
           setLoading(false);
-          resolve({ worker, pyodidePort: pyodidePortRef.current });
+          resolve({ worker, pyodidePort: pyodidePortRef.current, webrPort: webrPortRef.current });
         } else if (e.data.type === 'ERROR') {
           setError(e.data.error);
           setLoading(false);

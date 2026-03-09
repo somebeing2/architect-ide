@@ -11,13 +11,14 @@ export interface HistoryEntry {
 
 export type Theme = 'default-dark' | 'high-contrast' | 'cyberpunk';
 
-export type EditorMode = 'python' | 'sql';
+export type EditorMode = 'python' | 'sql' | 'r';
 
 interface AppState {
   csvData: string | null;
   csvFileName: string;
   code: string;
   sqlCode: string;
+  rCode: string;
   editorMode: EditorMode;
   history: HistoryEntry[];
   plotHtml: string | null;
@@ -31,6 +32,7 @@ interface AppActions {
   setCsvFileName: (name: string) => void;
   setCode: (code: string) => void;
   setSqlCode: (code: string) => void;
+  setRCode: (code: string) => void;
   setEditorMode: (mode: EditorMode) => void;
   addHistory: (entry: HistoryEntry) => void;
   deleteHistory: (id: string) => void;
@@ -54,6 +56,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [csvFileName,     setCsvFileName]   = useState('');
   const [code,            setCodeRaw]       = useState(DEFAULT_CODE);
   const [sqlCode,         setSqlCode]       = useState('SELECT * FROM data LIMIT 100;');
+  const [rCode,           setRCode]         = useState('# Write your R code here\\n# df <- read.csv("/data.csv")\\n');
   const [editorMode,      setEditorMode]    = useState<EditorMode>('python');
   const [history,         setHistory]       = useState<HistoryEntry[]>([]);
   const [plotHtml,        setPlotHtml]      = useState<string | null>(null);
@@ -161,6 +164,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       csvFileName, setCsvFileName,
       code, setCode,
       sqlCode, setSqlCode,
+      rCode, setRCode,
       editorMode, setEditorMode,
       history, addHistory, deleteHistory, clearHistory,
       plotHtml, setPlotHtml,

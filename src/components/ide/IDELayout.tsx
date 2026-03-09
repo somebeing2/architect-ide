@@ -20,6 +20,7 @@ import { SecurityBadge } from './SecurityBadge';
 import { GuidedTour } from './GuidedTour';
 import { ProcessingOverlay } from './ProcessingOverlay';
 import { usePyodide } from '@/hooks/usePyodide';
+import { useWebR } from '@/hooks/useWebR';
 import { useDuckDB, formatQueryResult } from '@/hooks/useDuckDB';
 import { type Template } from '@/lib/templates';
 import { useAppContext } from '@/context/AppContext';
@@ -40,6 +41,7 @@ export function IDELayout() {
     csvFileName, setCsvFileName,
     code, setCode,
     sqlCode, setSqlCode,
+    rCode, setRCode,
     editorMode, setEditorMode,
     addHistory,
     plotHtml, setPlotHtml,
@@ -72,10 +74,15 @@ export function IDELayout() {
     return csvData.trim().split('\n').length - 1;
   }, [csvData]);
 
-  const { output, clearOutput, appendOutput, runCode, loadExcel, loading: pyodideLoading, ready: pyodideReady, configPort, loadPyodide } = usePyodide();
+  const { output: pyOutput, clearOutput: clearPy, appendOutput: appendPy, runCode: runPy, loadExcel, loading: pyodideLoading, ready: pyodideReady, configPort: configPyPort, loadPyodide } = usePyodide();
+  const { output: rOutput, clearOutput: clearR, appendOutput: appendR, runCode: runR, loading: webrLoading, ready: webrReady, configPort: configWebRPort, loadWebR } = useWebR();
   const { loading: duckLoading, ready: duckReady, loadCSV: duckLoadCSV, runSQL, initDB } = useDuckDB();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const workersLinked = useRef(false);
+
+  const activeOutput = editorMode === 'r' ? rOutput : pyOutput;
+  const activeClearOutput = editorMode === 'r' ? clearR : clearPy;
+  const activeAppendOutput = editorMode === 'r' ? appendR : appendPy;
 
   // ── Initialize and link workers securely off-thread ────────────────────
   useEffect(() => {
@@ -83,20 +90,24 @@ export function IDELayout() {
       if (workersLinked.current) return;
       workersLinked.current = true;
       try {
-        const { pyodidePort } = await initDB();
-        await configPort(pyodidePort);
+        const { pyodidePort, webrPort } = await initDB();
+        await configPyPort(pyodidePort);
+        await configWebRPort(webrPort);
         
         if (canvasRef.current && 'transferControlToOffscreen' in canvasRef.current) {
           const offscreen = canvasRef.current.transferControlToOffscreen();
           const pWorker = await loadPyodide();
           pWorker.postMessage({ type: 'SET_CANVAS', canvas: offscreen }, [offscreen]);
         }
+
+        // Pre-warm WebR
+        await loadWebR();
       } catch (err) {
         console.error("Failed to link workers:", err);
       }
     }
     setupWorkers();
-  }, [initDB, configPort, loadPyodide]);
+  }, [initDB, configPyPort, loadPyodide, configWebRPort, loadWebR]);
 
   // ── File handlers ────────────────────────────────────────────────────────
   const handleFileLoaded = useCallback((data: string, fileName: string) => {
@@ -140,7 +151,12 @@ export function IDELayout() {
     if (!csvData) return;
     setRunning(true);
     const t0 = performance.now();
-    const result = await runCode(code, csvData);
+    let result;
+    if (editorMode === 'r') {
+      result = await runR(rCode, csvData);
+    } else {
+      result = await runPy(code, csvData);
+    }
     const ms = Math.round(performance.now() - t0);
     setLastRunMs(ms);
 
@@ -152,29 +168,29 @@ export function IDELayout() {
 
     addHistory({
       id       : Date.now().toString(),
-      name     : code.split('\n').find(l => l.startsWith('#'))?.replace('#', '').trim() || 'Analysis',
+      name     : (editorMode === 'r' ? rCode : code).split('\n').find(l => l.startsWith('#'))?.replace('#', '').trim() || 'Analysis',
       timestamp: new Date().toISOString(),
-      code,
+      code     : editorMode === 'r' ? rCode : code,
     });
 
     setRunning(false);
-  }, [code, csvData, runCode, setPlotHtml, addHistory, activeMainTab]);
+  }, [code, rCode, editorMode, csvData, runPy, runR, setPlotHtml, addHistory, activeMainTab]);
 
   // ── Run SQL via DuckDB ────────────────────────────────────────────────────
   const handleRunSQL = useCallback(async () => {
     if (!csvData || !sqlCode.trim()) return;
     setRunning(true);
-    appendOutput('>>> Running SQL via DuckDB…');
+    activeAppendOutput('>>> Running SQL via DuckDB…');
     try {
       await duckLoadCSV(csvData);
       const result = await runSQL(sqlCode);
       setLastRunMs(result.durationMs);
-      appendOutput(formatQueryResult(result));
+      activeAppendOutput(formatQueryResult(result));
     } catch (err: unknown) {
-      appendOutput(`SQL Error: ${err instanceof Error ? err.message : String(err)}`);
+      activeAppendOutput(`SQL Error: ${err instanceof Error ? err.message : String(err)}`);
     }
     setRunning(false);
-  }, [csvData, sqlCode, duckLoadCSV, runSQL, appendOutput]);
+  }, [csvData, sqlCode, duckLoadCSV, runSQL, activeAppendOutput]);
 
   // ── Large-dataset hint (> 500k rows) ─────────────────────────────────────
   const isLargeDataset = rowCount > 500_000;
@@ -193,13 +209,13 @@ export function IDELayout() {
     if (csvData) {
       setRunning(true);
       const t0 = performance.now();
-      const result = await runCode(generatedCode, csvData);
+      const result = await runPy(generatedCode, csvData);
       const ms = Math.round(performance.now() - t0);
       setLastRunMs(ms);
       if (result.plotHtml) setPlotHtml(result.plotHtml);
       setRunning(false);
     }
-  }, [setCode, setActiveMainTab, csvData, runCode, setPlotHtml]);
+  }, [setCode, setActiveMainTab, csvData, runPy, setPlotHtml]);
 
   // ── AI generation ────────────────────────────────────────────────────────
   const getCSVSchema = useCallback(() => {
@@ -597,6 +613,12 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
                       >
                         SQL
                       </button>
+                      <button
+                        onClick={() => setEditorMode('r')}
+                        className={`px-3 py-1 font-medium transition-colors ${editorMode === 'r' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        R
+                      </button>
                     </div>
                     {editorMode === 'sql' && (
                       <span className="text-[11px] text-muted-foreground">
@@ -614,16 +636,16 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
 
                   {/* Code editor + plot viewer */}
                   <div className="flex-1 flex overflow-hidden">
-                    <div className={`${plotHtml && editorMode === 'python' ? 'w-1/2' : 'w-full'} flex flex-col overflow-hidden p-2`}>
+                    <div className={`${plotHtml && (editorMode === 'python' || editorMode === 'r') ? 'w-1/2' : 'w-full'} flex flex-col overflow-hidden p-2`}>
                       <CodeEditor
-                        code={editorMode === 'python' ? code : sqlCode}
-                        onChange={editorMode === 'python' ? setCode : setSqlCode}
-                        onRun={editorMode === 'python' ? handleRunCode : handleRunSQL}
-                        running={running || pyodideLoading}
-                        title={editorMode === 'python' ? 'analysis.py' : 'query.sql'}
+                        code={editorMode === 'r' ? rCode : editorMode === 'python' ? code : sqlCode}
+                        onChange={editorMode === 'r' ? setRCode : editorMode === 'python' ? setCode : setSqlCode}
+                        onRun={editorMode === 'sql' ? handleRunSQL : handleRunCode}
+                        running={running || pyodideLoading || webrLoading}
+                        title={editorMode === 'r' ? 'analysis.R' : editorMode === 'python' ? 'analysis.py' : 'query.sql'}
                       />
                     </div>
-                    {plotHtml && editorMode === 'python' && (
+                    {plotHtml && (editorMode === 'python' || editorMode === 'r') && (
                       <div className="w-1/2 flex flex-col overflow-hidden p-2 pl-0">
                         <PlotViewer html={plotHtml} onClose={() => setPlotHtml(null)} />
                       </div>
@@ -641,7 +663,7 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
                         ? <ChevronDown className="w-3.5 h-3.5" />
                         : <ChevronUp className="w-3.5 h-3.5" />}
                     </button>
-                    <Terminal output={output} onClear={clearOutput} loading={running || pyodideLoading} />
+                    <Terminal output={activeOutput} onClear={activeClearOutput} loading={running || pyodideLoading || webrLoading} />
                   </div>
                 </>
               )}
@@ -663,6 +685,10 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
               {duckLoading ? 'DuckDB loading…' : 'DuckDB Ready'}
             </span>
           )}
+          <span className={`flex items-center gap-1 ${webrLoading ? 'text-warning' : webrReady ? 'text-success' : 'text-muted-foreground'}`}>
+            <span className="w-1.5 h-1.5 rounded-full bg-current" />
+            {webrLoading ? 'Loading WebR…' : webrReady ? 'WebR Ready' : 'WebR Idle'}
+          </span>
           <span className="hidden">{/* dummy to close span below */}
           </span>
           {csvFileName && <span>{csvFileName}</span>}
@@ -670,8 +696,8 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
         </div>
         <div className="flex items-center gap-3">
           <SecurityBadge />
-          <span className="mobile-hidden">Python 3.11 (WASM)</span>
-          <span className="mobile-hidden">Pandas · Plotly</span>
+          <span className="mobile-hidden">Pyodide · WebR</span>
+          <span className="mobile-hidden">Arrow Data</span>
         </div>
       </footer>
 
