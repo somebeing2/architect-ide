@@ -44,7 +44,7 @@ self.onmessage = async (e: MessageEvent) => {
           await db.registerFileBuffer(tableName + '.recordbatch', buffer);
           await conn.query(`DROP TABLE IF EXISTS ${tableName}`);
           await conn.query(`CREATE TABLE ${tableName} AS SELECT * FROM read_ipc('${tableName}.recordbatch')`);
-          self.postMessage({ type: 'ARROW_LOADED', tableName, source });
+          self.postMessage({ type: 'ARROW_LOADED', tableName, source, byteLength: buffer.byteLength });
         } catch (err: any) {
           self.postMessage({ type: 'ERROR', error: 'Arrow Load Error: ' + err.message });
         }
@@ -90,7 +90,10 @@ self.onmessage = async (e: MessageEvent) => {
       await db.registerFileText('data.csv', payload.csvData);
       await conn.query('DROP TABLE IF EXISTS data');
       await conn.query("CREATE TABLE data AS SELECT * FROM read_csv_auto('data.csv', header=true)");
-      self.postMessage({ type: 'CSV_LOADED', id: payload.id });
+      
+      const encoder = new TextEncoder();
+      const byteLength = encoder.encode(payload.csvData).byteLength;
+      self.postMessage({ type: 'CSV_LOADED', id: payload.id, byteLength });
     } catch (err: any) {
       self.postMessage({ type: 'ERROR', error: err.message, id: payload.id });
     }

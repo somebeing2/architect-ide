@@ -10,6 +10,7 @@ export interface QueryResult {
 export interface ActiveTable {
   tableName: string;
   source: 'python' | 'r' | 'csv';
+  byteLength?: number;
 }
 
 export function useDuckDB() {
@@ -48,7 +49,7 @@ export function useDuckDB() {
         } else if (e.data.type === 'ARROW_LOADED') {
           setActiveTables(prev => {
             const temp = prev.filter(t => t.tableName !== e.data.tableName);
-            return [...temp, { tableName: e.data.tableName, source: e.data.source }];
+            return [...temp, { tableName: e.data.tableName, source: e.data.source, byteLength: e.data.byteLength }];
           });
         } else if (e.data.type === 'ERROR') {
           setError(e.data.error);
@@ -70,8 +71,8 @@ export function useDuckDB() {
           worker.removeEventListener('message', handler);
           if (e.data.type === 'CSV_LOADED') {
             setActiveTables(prev => {
-              if (prev.find(t => t.tableName === 'data')) return prev;
-              return [...prev, { tableName: 'data', source: 'csv' }];
+              const temp = prev.filter(t => t.tableName !== 'data');
+              return [...temp, { tableName: 'data', source: 'csv', byteLength: e.data.byteLength }];
             });
             resolve();
           }

@@ -17,6 +17,13 @@ export function ActiveTablesSidebar({ tables }: ActiveTablesSidebarProps) {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const formatBytes = (bytes?: number) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
   return (
     <div className="flex flex-col h-full bg-sidebar">
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border shrink-0">
@@ -49,7 +56,12 @@ export function ActiveTablesSidebar({ tables }: ActiveTablesSidebarProps) {
                     table.source === 'python' ? 'bg-yellow-400' :
                     table.source === 'r' ? 'bg-blue-500' : 'bg-green-500'
                   }`} />
-                  <p className="text-xs font-medium text-foreground truncate" title={table.tableName}>{table.tableName}</p>
+                  <div className="flex flex-col min-w-0">
+                    <p className="text-xs font-medium text-foreground truncate" title={table.tableName}>{table.tableName}</p>
+                    {table.byteLength !== undefined && (
+                      <p className="text-[10px] text-muted-foreground">{formatBytes(table.byteLength)}</p>
+                    )}
+                  </div>
                 </div>
                 <button
                   onClick={() => handleCopy(table.tableName)}
