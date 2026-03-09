@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 export interface QueryResult {
   columns: string[];
@@ -21,6 +21,15 @@ export function useDuckDB() {
   const workerRef = useRef<Worker | null>(null);
   const pyodidePortRef = useRef<MessagePort | null>(null);
   const webrPortRef = useRef<MessagePort | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
+    };
+  }, []);
 
   const initDB = useCallback(async (): Promise<{ worker: Worker, pyodidePort: MessagePort, webrPort: MessagePort }> => {
     if (workerRef.current && pyodidePortRef.current && webrPortRef.current) {

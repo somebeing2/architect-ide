@@ -1,10 +1,19 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 export function useWebR() {
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const workerRef = useRef<Worker | null>(null);
   const [output, setOutput] = useState<string[]>([]);
+
+  useEffect(() => {
+    return () => {
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
+    };
+  }, []);
 
   const loadWebR = useCallback(async () => {
     if (workerRef.current) return workerRef.current;
