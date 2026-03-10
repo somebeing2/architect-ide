@@ -4,6 +4,7 @@ let pyodide: any = null;
 let duckDbPort: MessagePort | null = null;
 let offscreenCanvas: OffscreenCanvas | null = null;
 let ctx: OffscreenCanvasRenderingContext2D | null = null;
+let skipCanvas: boolean = false;
 
 // Stub out document/window for matplotlib/plotly if needed, though Pyodide handles most of it.
 self.window = self as any;
@@ -61,7 +62,13 @@ self.onmessage = async (e: MessageEvent) => {
     duckDbPort = e.ports[0];
   }
   else if (type === 'SET_CANVAS') {
-    offscreenCanvas = e.data.canvas;
+    if (!e.data.canvas) {
+      self.postMessage({ type: 'LOG', msg: '>>> WARNING: OffscreenCanvas failed to transfer. Proceeding with data-only analysis.' });
+      skipCanvas = true;
+    } else {
+      offscreenCanvas = e.data.canvas;
+      skipCanvas = false;
+    }
   }
   else if (type === 'LOAD_EXCEL') {
     self.postMessage({ type: 'LOG', msg: '>>> Converting Excel file via pandas to Arrow…' });
@@ -111,12 +118,23 @@ _arrow_buffer = sink.getvalue().to_pybytes()
   else if (type === 'RUN_CODE') {
     self.postMessage({ type: 'LOG', msg: '>>> Running analysis…' });
     try {
+      const pandasLoaded = pyodide.runPython("import sys; 'pandas' in sys.modules");
+      if (!pandasLoaded) {
+        self.postMessage({ type: 'LOG', msg: '>>> Packages Loading...' });
+        throw new Error("Core packages not fully loaded. Please try again in a moment.");
+      }
+
       if (payload.csvData) {
         pyodide.FS.writeFile('/data.csv', new TextEncoder().encode(payload.csvData));
       }
 
-      await pyodide.runPythonAsync(`${payload.code}\n\n_output = _capture.get_output()`);
-      const capturedOutput = pyodide.globals.get('_output') || '';
+      let capturedOutput = '';
+      try {
+        await pyodide.runPythonAsync(`${payload.code}\n\n_output = _capture.get_output()`);
+        capturedOutput = pyodide.globals.get('_output') || '';
+      } catch (pyErr: any) {
+        throw new Error("Python Execution Error:\n" + pyErr.message);
+      }
 
       // Check for plotly figure
       let plotHtml: string | undefined;

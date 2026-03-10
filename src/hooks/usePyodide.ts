@@ -78,15 +78,28 @@ export function usePyodide() {
     const worker = await loadPyodide();
 
     return new Promise((resolve, reject) => {
+      let timeoutId: number;
+
       const handler = (e: MessageEvent) => {
         if (e.data.type === 'CODE_RESULT') {
+          clearTimeout(timeoutId);
           worker.removeEventListener('message', handler);
           resolve({ output: e.data.output, plotHtml: e.data.plotHtml });
         } else if (e.data.type === 'ERROR') {
+          clearTimeout(timeoutId);
           worker.removeEventListener('message', handler);
           reject(new Error(e.data.error));
         }
       };
+
+      timeoutId = window.setTimeout(() => {
+        worker.removeEventListener('message', handler);
+        worker.terminate();
+        if (workerRef.current === worker) workerRef.current = null;
+        loadPyodide(); // Background reboot
+        reject(new Error("Timeout: Analysis took longer than 30 seconds. Worker has been restarted."));
+      }, 30000);
+
       worker.addEventListener('message', handler);
       worker.postMessage({ type: 'RUN_CODE', payload: { code, csvData, exportTableName } });
     });
