@@ -31,11 +31,14 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
           cache: 'npm'
 
+      - name: Install dependencies
+        run: npm install
+
       - name: Build
-        run: npm install && npm run build
+        run: npm run build
         
       - name: Setup Pages
         uses: actions/configure-pages@v4
