@@ -71,6 +71,7 @@ One-click **Titanic dataset** loader (891 rows) for instant demos — no file re
 | Data / Viz | Pandas, Plotly |
 | Syntax Highlight | Prism.js |
 | AI | Anthropic Claude API (BYOK) |
+| Orchestration | Antigravity |
 | Icons | Lucide React |
 | Deployment | GitHub Actions → GitHub Pages |
 
@@ -102,7 +103,7 @@ To run **Architect-WASM** on your own machine, follow these steps:
 
 ## The $100 Engineering Challenge
 
-This project was built entirely using **Claude Sonnet** as the sole engineering resource — from blank repository to production-grade IDE — within a strict $100 API budget.
+This project was built entirely using **Claude Sonnet** as the primary engineering resource — from blank repository to production-grade IDE — within a strict $100 API budget. Furthermore, the advanced Tri-Engine and Arrow IPC logic was finalized using **Antigravity's** agent-first environment.
 
 ### Financial Metrics
 
