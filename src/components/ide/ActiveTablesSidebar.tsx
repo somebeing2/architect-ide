@@ -37,7 +37,7 @@ export function ActiveTablesSidebar({ tables }: ActiveTablesSidebarProps) {
         {tables.length === 0 && (
           <div className="text-center py-6">
             <Database className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-            <p className="text-[11px] text-muted-foreground">No tables available.<br/>Load CSV or Export from Py/R.</p>
+            <p className="text-[11px] text-muted-foreground">No tables available.<br />Load CSV or Export from Py/R.</p>
           </div>
         )}
         <AnimatePresence initial={false}>
@@ -52,12 +52,17 @@ export function ActiveTablesSidebar({ tables }: ActiveTablesSidebarProps) {
             >
               <div className="group flex items-center justify-between p-2 rounded hover:bg-secondary/50 transition-colors">
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${
-                    table.source === 'python' ? 'bg-yellow-400' :
-                    table.source === 'r' ? 'bg-blue-500' : 'bg-green-500'
-                  }`} />
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${table.source === 'python' ? 'bg-yellow-400' :
+                      table.source === 'r' ? 'bg-blue-500' : 'bg-green-500'
+                    }`} />
                   <div className="flex flex-col min-w-0">
-                    <p className="text-xs font-medium text-foreground truncate" title={table.tableName}>{table.tableName}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-medium text-foreground truncate" title={table.tableName}>{table.tableName}</p>
+                      <div className="flex items-center gap-0.5 rounded bg-success/10 px-1 py-0.5" title="Arrow IPC Sync Complete">
+                        <CheckCircle2 className="w-3 h-3 text-success" />
+                        <span className="text-[9px] font-medium text-success uppercase tracking-wider">Synced</span>
+                      </div>
+                    </div>
                     {table.byteLength !== undefined && (
                       <p className="text-[10px] text-muted-foreground">{formatBytes(table.byteLength)}</p>
                     )}

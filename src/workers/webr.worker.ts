@@ -14,7 +14,7 @@ self.onmessage = async (e: MessageEvent) => {
 
       self.postMessage({ type: 'LOG', msg: '>>> Installing core R packages (arrow, base64enc)…' });
       await webr.installPackages(['arrow', 'base64enc']);
-      
+
       // Setup the capture helper
       await webr.evalRVoid(`
         .capture_output <- function(code) {
@@ -30,7 +30,7 @@ self.onmessage = async (e: MessageEvent) => {
     } catch (err: any) {
       self.postMessage({ type: 'ERROR', error: err.message });
     }
-  } 
+  }
   else if (type === 'SET_PORT') {
     duckDbPort = e.ports[0];
   }
@@ -44,11 +44,11 @@ self.onmessage = async (e: MessageEvent) => {
 
       const escapedCode = payload.code.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
       const plotFile = '/plot.png';
-      
+
       let capturedOutput = '';
       try {
         await webr.evalRVoid(`png("${plotFile}", width=800, height=600)`);
-        
+
         const res = await webr.evalR(`.capture_output("${escapedCode}")`);
         capturedOutput = await res.toString();
 
@@ -68,25 +68,27 @@ self.onmessage = async (e: MessageEvent) => {
       }
 
       try {
-        const arrowObj = await webr.evalR(`
-          tryCatch({
-            if (exists("data") && is.data.frame(get("data"))) {
-              arrow::write_to_raw(data, format = "stream")
-            } else {
-              NULL
+        const dfNamesObj = await webr.evalR(`Filter(function(x) is.data.frame(get(x)), ls())`);
+        const dfNames = await dfNamesObj.toJs() as string[];
+
+        for (const name of dfNames) {
+          try {
+            const arrowObj = await webr.evalR(`arrow::write_to_raw(get("${name}"), format = "stream")`);
+            const arrowType = await arrowObj.type();
+            if (arrowType === 'raw' && duckDbPort) {
+              const arrowBuffer = (await arrowObj.toJs() as unknown) as Uint8Array;
+              duckDbPort.postMessage({
+                type: 'ARROW_DATA',
+                source: 'r',
+                tableName: name,
+                buffer: arrowBuffer
+              }, [arrowBuffer.buffer]);
             }
-          }, error = function(...) NULL)
-        `);
-        const arrowType = await arrowObj.type();
-        if (arrowType === 'raw' && duckDbPort) {
-          const arrowBuffer = (await arrowObj.toJs() as unknown) as Uint8Array;
-          duckDbPort.postMessage({
-            type: 'ARROW_DATA',
-            name: 'data',
-            buffer: arrowBuffer
-          }, [arrowBuffer.buffer]);
+          } catch (e) {
+            console.error(`Failed to sync R dataframe ${name}:`, e);
+          }
         }
-      } catch {}
+      } catch { }
 
       self.postMessage({ type: 'CODE_RESULT', output: capturedOutput || 'Analysis complete.', plotHtml });
     } catch (err: any) {

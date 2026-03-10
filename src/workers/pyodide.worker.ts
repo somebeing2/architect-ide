@@ -56,7 +56,7 @@ self.onmessage = async (e: MessageEvent) => {
     } catch (err: any) {
       self.postMessage({ type: 'ERROR', error: err.message });
     }
-  } 
+  }
   else if (type === 'SET_PORT') {
     duckDbPort = e.ports[0];
   }
@@ -124,35 +124,38 @@ except Exception:
     _plot_html = ''
 `);
         plotHtml = pyodide.globals.get('_plot_html') || undefined;
-      } catch {}
+      } catch { }
 
-      // Automatically export 'data' DataFrame to DuckDB if it exists
+      // Automatically export all DataFrames to DuckDB
       try {
         await pyodide.runPythonAsync(`
 try:
-    if 'data' in globals() and isinstance(globals()['data'], pd.DataFrame):
-        table = pa.Table.from_pandas(globals()['data'])
+    _export_targets = {k: v for k, v in globals().items() if not k.startswith('_') and isinstance(v, pd.DataFrame)}
+    _arrows = {}
+    for name, df in _export_targets.items():
+        table = pa.Table.from_pandas(df)
         sink = pa.BufferOutputStream()
         with ipc.RecordBatchStreamWriter(sink, table.schema) as writer:
             writer.write_table(table)
-        _out_arrow = sink.getvalue().to_pybytes()
-    else:
-        _out_arrow = None
+        _arrows[name] = sink.getvalue().to_pybytes()
 except Exception:
-    _out_arrow = None
+    _arrows = {}
 `);
-        const outArrow = pyodide.globals.get('_out_arrow');
-        if (outArrow && duckDbPort) {
-          const uint8Array = new Uint8Array(outArrow);
-          duckDbPort.postMessage({
-            type: 'ARROW_DATA',
-            source: 'python',
-            tableName: payload.exportTableName || 'python_data',
-            buffer: uint8Array
-          }, [uint8Array.buffer]);
-          outArrow.destroy();
+        const arrowMap = pyodide.globals.get('_arrows');
+        if (arrowMap && duckDbPort) {
+          const jsMap = arrowMap.toJs();
+          for (const [name, buffer] of jsMap.entries()) {
+            const uint8Array = new Uint8Array(buffer);
+            duckDbPort.postMessage({
+              type: 'ARROW_DATA',
+              source: 'python',
+              tableName: name,
+              buffer: uint8Array
+            }, [uint8Array.buffer]);
+          }
+          arrowMap.destroy();
         }
-      } catch {}
+      } catch { }
 
       self.postMessage({ type: 'CODE_RESULT', output: capturedOutput || 'Analysis complete.', plotHtml });
     } catch (err: any) {
