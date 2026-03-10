@@ -80,8 +80,13 @@ export function useWebR() {
     worker.postMessage({ type: 'RUN_CODE', payload: { code: 'invisible()', exportTableName: tableName } });
   }, [loadWebR]);
 
-  const clearOutput   = useCallback(() => setOutput([]), []);
-  const appendOutput  = useCallback((msg: string) => setOutput(prev => [...prev, msg]), []);
+  const mountWorkspace = useCallback(async (files: File[]) => {
+    const worker = await loadWebR();
+    worker.postMessage({ type: 'MOUNT_WORKSPACE', payload: { files } });
+  }, [loadWebR]);
 
-  return { loading, ready, runCode, output, clearOutput, appendOutput, loadWebR, configPort, exportToSQL };
+  const clearOutput = useCallback(() => setOutput([]), []);
+  const appendOutput = useCallback((msg: string) => setOutput(prev => [...prev, msg]), []);
+
+  return { loading, ready, runCode, output, clearOutput, appendOutput, loadWebR, configPort, exportToSQL, mountWorkspace };
 }

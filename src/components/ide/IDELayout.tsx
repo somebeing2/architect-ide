@@ -3,7 +3,7 @@ import {
   Settings, Github, Cpu, Database,
   ChevronDown, ChevronUp, Sparkles, AlertCircle,
   Activity, LayoutTemplate, BarChart2,
-  Code2, HelpCircle, Palette, Download,
+  Code2, HelpCircle, Palette, Download, FolderOpen, FolderCheck
 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { CSVDropzone } from './CSVDropzone';
@@ -26,6 +26,7 @@ import { useDuckDB, formatQueryResult } from '@/hooks/useDuckDB';
 import { type Template } from '@/lib/templates';
 import { useAppContext } from '@/context/AppContext';
 import { type Theme } from '@/context/AppContext';
+import { useFileSystem } from '@/hooks/useFileSystem';
 
 const TITANIC_URL =
   'https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv';
@@ -33,7 +34,7 @@ const TITANIC_URL =
 const THEMES: { value: Theme; label: string }[] = [
   { value: 'default-dark', label: 'Default Dark' },
   { value: 'high-contrast', label: 'High Contrast' },
-  { value: 'cyberpunk',     label: 'Cyberpunk' },
+  { value: 'cyberpunk', label: 'Cyberpunk' },
 ];
 
 export function IDELayout() {
@@ -49,25 +50,29 @@ export function IDELayout() {
     activeMainTab, setActiveMainTab,
     theme, setTheme,
     sessionRestored,
+    workspaceName, setWorkspaceName,
+    workspaceFiles, setWorkspaceFiles
   } = useAppContext();
 
-  const [settingsOpen,       setSettingsOpen]       = useState(false);
-  const [galleryOpen,        setGalleryOpen]         = useState(false);
-  const [healthOpen,         setHealthOpen]          = useState(false);
-  const [running,            setRunning]             = useState(false);
-  const [terminalExpanded,   setTerminalExpanded]    = useState(true);
-  const [aiPrompt,           setAiPrompt]            = useState('');
-  const [aiLoading,          setAiLoading]           = useState(false);
-  const [titanicLoading,     setTitanicLoading]      = useState(false);
-  const [lastRunMs,          setLastRunMs]           = useState<number | undefined>();
+  const { requestWorkspace, loading: fsLoading, error: fsError } = useFileSystem();
+
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [healthOpen, setHealthOpen] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [terminalExpanded, setTerminalExpanded] = useState(true);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [titanicLoading, setTitanicLoading] = useState(false);
+  const [lastRunMs, setLastRunMs] = useState<number | undefined>();
   // Glowing dot: chart was produced while on the Editor tab
-  const [newPlotReady,       setNewPlotReady]        = useState(false);
+  const [newPlotReady, setNewPlotReady] = useState(false);
   // Guided tour in the empty visualizer panel
-  const [tourActive,         setTourActive]          = useState(false);
+  const [tourActive, setTourActive] = useState(false);
   // Theme dropdown
-  const [themeMenuOpen,      setThemeMenuOpen]       = useState(false);
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   // Session restored notification (shown once)
-  const [restoredDismissed,  setRestoredDismissed]   = useState(false);
+  const [restoredDismissed, setRestoredDismissed] = useState(false);
 
   // Row count used by the processing overlay
   const rowCount = useMemo(() => {
@@ -75,9 +80,9 @@ export function IDELayout() {
     return csvData.trim().split('\n').length - 1;
   }, [csvData]);
 
-  const { output: pyOutput, clearOutput: clearPy, appendOutput: appendPy, runCode: runPy, loadExcel, loading: pyodideLoading, ready: pyodideReady, configPort: configPyPort, loadPyodide, exportToSQL: pyExportToSQL } = usePyodide();
-  const { output: rOutput, clearOutput: clearR, appendOutput: appendR, runCode: runR, loading: webrLoading, ready: webrReady, configPort: configWebRPort, loadWebR, exportToSQL: rExportToSQL } = useWebR();
-  const { loading: duckLoading, ready: duckReady, loadCSV: duckLoadCSV, runSQL, initDB, activeTables } = useDuckDB();
+  const { output: pyOutput, clearOutput: clearPy, appendOutput: appendPy, runCode: runPy, loadExcel, loading: pyodideLoading, ready: pyodideReady, configPort: configPyPort, loadPyodide, exportToSQL: pyExportToSQL, mountWorkspace: mountWorkspacePy } = usePyodide();
+  const { output: rOutput, clearOutput: clearR, appendOutput: appendR, runCode: runR, loading: webrLoading, ready: webrReady, configPort: configWebRPort, loadWebR, exportToSQL: rExportToSQL, mountWorkspace: mountWorkspaceR } = useWebR();
+  const { loading: duckLoading, ready: duckReady, loadCSV: duckLoadCSV, runSQL, initDB, activeTables, mountWorkspace: mountWorkspaceDuck } = useDuckDB();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const workersLinked = useRef(false);
 
@@ -94,7 +99,7 @@ export function IDELayout() {
         const { pyodidePort, webrPort } = await initDB();
         await configPyPort(pyodidePort);
         await configWebRPort(webrPort);
-        
+
         if (canvasRef.current && 'transferControlToOffscreen' in canvasRef.current) {
           const offscreen = canvasRef.current.transferControlToOffscreen();
           const pWorker = await loadPyodide();
@@ -147,6 +152,25 @@ export function IDELayout() {
     }
   }, [handleFileLoaded]);
 
+  // ── Workspace mounting ───────────────────────────────────────────────────
+  const handleMountWorkspace = useCallback(async () => {
+    try {
+      const workspace = await requestWorkspace();
+      if (workspace) {
+        setWorkspaceName(workspace.directoryName);
+        setWorkspaceFiles(workspace.files);
+        // Post the files to workers
+        await activeAppendOutput('>>> Mounting local workspace: ' + workspace.directoryName + '...');
+        try { await mountWorkspacePy(workspace.files); } catch { }
+        try { await mountWorkspaceR(workspace.files); } catch { }
+        try { await mountWorkspaceDuck(workspace.files); } catch { }
+        await activeAppendOutput('>>> Workspace universally bridged to Pyodide, WebR, and DuckDB at /mnt');
+      }
+    } catch (e: any) {
+      activeAppendOutput('>>> Workspace error: ' + (e?.message || String(e)));
+    }
+  }, [requestWorkspace, setWorkspaceName, setWorkspaceFiles, activeAppendOutput]);
+
   // ── Run code ─────────────────────────────────────────────────────────────
   const handleRunCode = useCallback(async () => {
     if (!csvData) return;
@@ -168,10 +192,10 @@ export function IDELayout() {
     }
 
     addHistory({
-      id       : Date.now().toString(),
-      name     : (editorMode === 'r' ? rCode : code).split('\n').find(l => l.startsWith('#'))?.replace('#', '').trim() || 'Analysis',
+      id: Date.now().toString(),
+      name: (editorMode === 'r' ? rCode : code).split('\n').find(l => l.startsWith('#'))?.replace('#', '').trim() || 'Analysis',
       timestamp: new Date().toISOString(),
-      code     : editorMode === 'r' ? rCode : code,
+      code: editorMode === 'r' ? rCode : code,
     });
 
     setRunning(false);
@@ -232,9 +256,9 @@ export function IDELayout() {
   // ── AI generation ────────────────────────────────────────────────────────
   const getCSVSchema = useCallback(() => {
     if (!csvData) return '';
-    const lines   = csvData.trim().split('\n');
+    const lines = csvData.trim().split('\n');
     const headers = lines[0];
-    const sample  = lines.slice(1, 3).join('\n');
+    const sample = lines.slice(1, 3).join('\n');
     return `Columns: ${headers}\nSample:\n${sample}`;
   }, [csvData]);
 
@@ -246,18 +270,18 @@ export function IDELayout() {
     try {
       const schema = getCSVSchema();
       const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method : 'POST',
+        method: 'POST',
         headers: {
-          'Content-Type'                              : 'application/json',
-          'x-api-key'                                 : apiKey,
-          'anthropic-version'                         : '2023-06-01',
-          'anthropic-dangerous-direct-browser-access' : 'true',
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
-          model     : 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-4-20250514',
           max_tokens: 2048,
-          messages  : [{
-            role   : 'user',
+          messages: [{
+            role: 'user',
             content: `You are a data science assistant. Generate Python code using pandas to analyze a CSV file at '/data.csv'.
 Schema: ${schema}
 Task: ${aiPrompt}
@@ -266,7 +290,7 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
         }),
       });
 
-      const data          = await response.json() as { content?: Array<{ text: string }> };
+      const data = await response.json() as { content?: Array<{ text: string }> };
       const generatedCode = data.content?.[0]?.text ?? '# AI generation failed';
       setCode(generatedCode.replace(/```python\n?/g, '').replace(/```\n?/g, ''));
     } catch (err: unknown) {
@@ -280,7 +304,7 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
     if (!plotHtml) return;
 
     const rowCount = csvData ? csvData.trim().split('\n').length - 1 : 0;
-    const columns  = csvData ? csvData.trim().split('\n')[0] : '';
+    const columns = csvData ? csvData.trim().split('\n')[0] : '';
     const timestamp = new Date().toLocaleString();
 
     const reportHtml = `<!DOCTYPE html>
@@ -326,9 +350,9 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
 </html>`;
 
     const blob = new Blob([reportHtml], { type: 'text/html' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
     a.download = `architect-report-${Date.now()}.html`;
     a.click();
     URL.revokeObjectURL(url);
@@ -375,6 +399,20 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
               {titanicLoading ? 'Loading…' : 'Sample Data'}
             </button>
           )}
+
+          {/* Mount Workspace button */}
+          <button
+            onClick={workspaceName ? undefined : handleMountWorkspace}
+            disabled={fsLoading || !!workspaceName}
+            title={workspaceName ? `Workspace mounted: ${workspaceName}` : "Mount local directory to /mnt"}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ml-1 ${workspaceName
+              ? 'bg-success/10 text-success cursor-default'
+              : 'bg-secondary text-secondary-foreground hover:bg-secondary/80 disabled:opacity-50'
+              }`}
+          >
+            {workspaceName ? <FolderCheck className="w-3.5 h-3.5" /> : <FolderOpen className="w-3.5 h-3.5" />}
+            {workspaceName ? workspaceName : fsLoading ? 'Mounting…' : 'Mount Workspace'}
+          </button>
 
           {/* Gallery button */}
           <button
@@ -423,11 +461,10 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
                     <button
                       key={t.value}
                       onClick={() => { setTheme(t.value); setThemeMenuOpen(false); }}
-                      className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
-                        theme === t.value
-                          ? 'text-primary bg-secondary'
-                          : 'text-foreground hover:bg-secondary'
-                      }`}
+                      className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${theme === t.value
+                        ? 'text-primary bg-secondary'
+                        : 'text-foreground hover:bg-secondary'
+                        }`}
                     >
                       {t.label}
                     </button>
@@ -505,21 +542,19 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
               <div className="flex items-center gap-0 px-4 pt-2 border-b border-border shrink-0 bg-card/50">
                 <button
                   onClick={() => setActiveMainTab('editor')}
-                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-all ${
-                    activeMainTab === 'editor'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-all ${activeMainTab === 'editor'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                    }`}
                 >
                   <Code2 className="w-3.5 h-3.5" /> Editor
                 </button>
                 <button
                   onClick={() => { setActiveMainTab('visualizer'); setNewPlotReady(false); }}
-                  className={`relative flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-all ${
-                    activeMainTab === 'visualizer'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
+                  className={`relative flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-all ${activeMainTab === 'visualizer'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                    }`}
                 >
                   <BarChart2 className="w-3.5 h-3.5" /> Visualizer
                   {/* Glowing notification dot — chart ready but user is on Editor tab */}
@@ -641,7 +676,7 @@ Rules: Use pandas. If visualization needed, use plotly and store figure in varia
                       <span className="text-[11px] text-muted-foreground">
                         DuckDB · table name: <code className="text-primary font-mono">data</code> (or <code className="text-primary font-mono">python_data</code>, <code className="text-primary font-mono">r_data</code>)
                         {duckLoading && ' · initializing…'}
-                        {duckReady  && ' · ready'}
+                        {duckReady && ' · ready'}
                       </span>
                     )}
                     {isLargeDataset && editorMode === 'python' && (

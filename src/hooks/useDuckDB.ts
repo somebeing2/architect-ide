@@ -14,9 +14,9 @@ export interface ActiveTable {
 }
 
 export function useDuckDB() {
-  const [loading,  setLoading]  = useState(false);
-  const [ready,    setReady]    = useState(false);
-  const [error,    setError]    = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [activeTables, setActiveTables] = useState<ActiveTable[]>([]);
   const workerRef = useRef<Worker | null>(null);
   const pyodidePortRef = useRef<MessagePort | null>(null);
@@ -51,7 +51,7 @@ export function useDuckDB() {
           const rChannel = new MessageChannel();
           webrPortRef.current = rChannel.port1;
           worker.postMessage({ type: 'SET_PORT' }, [rChannel.port2]);
-          
+
           setReady(true);
           setLoading(false);
           resolve({ worker, pyodidePort: pyodidePortRef.current, webrPort: webrPortRef.current });
@@ -111,7 +111,12 @@ export function useDuckDB() {
     });
   }, [initDB]);
 
-  return { loading, ready, error, initDB, loadCSV, runSQL, activeTables };
+  const mountWorkspace = useCallback(async (files: File[]) => {
+    const { worker } = await initDB();
+    worker.postMessage({ type: 'MOUNT_WORKSPACE', payload: { files } });
+  }, [initDB]);
+
+  return { loading, ready, error, initDB, loadCSV, runSQL, activeTables, mountWorkspace };
 }
 
 export function formatQueryResult({ columns, rows, rowCount, durationMs }: QueryResult): string {
@@ -119,7 +124,7 @@ export function formatQueryResult({ columns, rows, rowCount, durationMs }: Query
   const widths = columns.map((col, ci) =>
     Math.max(col.length, ...rows.map(r => (r[ci] ?? '').length))
   );
-  const sep  = '+' + widths.map(w => '-'.repeat(w + 2)).join('+') + '+';
+  const sep = '+' + widths.map(w => '-'.repeat(w + 2)).join('+') + '+';
   const head = '|' + columns.map((col, ci) => ` ${col.padEnd(widths[ci])} `).join('|') + '|';
   const dataLines = rows.slice(0, 200).map(row =>
     '|' + row.map((cell, ci) => ` ${(cell ?? '').padEnd(widths[ci])} `).join('|') + '|'

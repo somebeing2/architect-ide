@@ -25,6 +25,8 @@ interface AppState {
   activeMainTab: 'editor' | 'visualizer';
   theme: Theme;
   sessionRestored: boolean;
+  workspaceName: string | null;
+  workspaceFiles: File[];
 }
 
 interface AppActions {
@@ -40,29 +42,33 @@ interface AppActions {
   setPlotHtml: (html: string | null) => void;
   setActiveMainTab: (tab: 'editor' | 'visualizer') => void;
   setTheme: (theme: Theme) => void;
+  setWorkspaceName: (name: string | null) => void;
+  setWorkspaceFiles: (files: File[]) => void;
 }
 
 const AppContext = createContext<(AppState & AppActions) | null>(null);
 
-const HISTORY_KEY    = 'architect_wasm_history';
-const THEME_KEY      = 'architect_wasm_theme';
-const IDB_CSV_KEY    = 'architect_csv';
-const IDB_CODE_KEY   = 'architect_code';
+const HISTORY_KEY = 'architect_wasm_history';
+const THEME_KEY = 'architect_wasm_theme';
+const IDB_CSV_KEY = 'architect_csv';
+const IDB_CODE_KEY = 'architect_code';
 
 const DEFAULT_CODE = '# Upload a CSV and select a template to begin\n';
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [csvData,         setCsvDataRaw]    = useState<string | null>(null);
-  const [csvFileName,     setCsvFileName]   = useState('');
-  const [code,            setCodeRaw]       = useState(DEFAULT_CODE);
-  const [sqlCode,         setSqlCode]       = useState('SELECT * FROM data LIMIT 100;');
-  const [rCode,           setRCode]         = useState('# Write your R code here\\n# df <- read.csv("/data.csv")\\n');
-  const [editorMode,      setEditorMode]    = useState<EditorMode>('python');
-  const [history,         setHistory]       = useState<HistoryEntry[]>([]);
-  const [plotHtml,        setPlotHtml]      = useState<string | null>(null);
-  const [activeMainTab,   setActiveMainTab] = useState<'editor' | 'visualizer'>('editor');
-  const [theme,           setThemeState]    = useState<Theme>('default-dark');
+  const [csvData, setCsvDataRaw] = useState<string | null>(null);
+  const [csvFileName, setCsvFileName] = useState('');
+  const [code, setCodeRaw] = useState(DEFAULT_CODE);
+  const [sqlCode, setSqlCode] = useState('SELECT * FROM data LIMIT 100;');
+  const [rCode, setRCode] = useState('# Write your R code here\\n# df <- read.csv("/data.csv")\\n');
+  const [editorMode, setEditorMode] = useState<EditorMode>('python');
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [plotHtml, setPlotHtml] = useState<string | null>(null);
+  const [activeMainTab, setActiveMainTab] = useState<'editor' | 'visualizer'>('editor');
+  const [theme, setThemeState] = useState<Theme>('default-dark');
   const [sessionRestored, setSessionRestored] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState<string | null>(null);
+  const [workspaceFiles, setWorkspaceFiles] = useState<File[]>([]);
 
   // debounce timer ref for code saves
   const codeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -100,7 +106,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setSessionRestored(true);
       }
     }).catch(() => { /* ignore */ });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Apply theme to document ──────────────────────────────────────────────
@@ -118,9 +124,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // ── Persist csvData to IndexedDB ─────────────────────────────────────────
   useEffect(() => {
     if (csvData === null) {
-      idbDel(IDB_CSV_KEY).catch(() => {});
+      idbDel(IDB_CSV_KEY).catch(() => { });
     } else {
-      idbSet(IDB_CSV_KEY, csvData).catch(() => {});
+      idbSet(IDB_CSV_KEY, csvData).catch(() => { });
     }
   }, [csvData]);
 
@@ -128,7 +134,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (codeDebounceRef.current) clearTimeout(codeDebounceRef.current);
     codeDebounceRef.current = setTimeout(() => {
-      idbSet(IDB_CODE_KEY, code).catch(() => {});
+      idbSet(IDB_CODE_KEY, code).catch(() => { });
     }, 500);
     return () => {
       if (codeDebounceRef.current) clearTimeout(codeDebounceRef.current);
@@ -171,6 +177,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       activeMainTab, setActiveMainTab,
       theme, setTheme,
       sessionRestored,
+      workspaceName, setWorkspaceName,
+      workspaceFiles, setWorkspaceFiles,
     }}>
       {children}
     </AppContext.Provider>

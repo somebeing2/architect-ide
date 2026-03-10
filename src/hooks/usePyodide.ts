@@ -99,8 +99,13 @@ export function usePyodide() {
     worker.postMessage({ type: 'RUN_CODE', payload: { code: 'pass', exportTableName: tableName } });
   }, [loadPyodide]);
 
-  const clearOutput   = useCallback(() => setOutput([]), []);
-  const appendOutput  = useCallback((msg: string) => setOutput(prev => [...prev, msg]), []);
+  const mountWorkspace = useCallback(async (files: File[]) => {
+    const worker = await loadPyodide();
+    worker.postMessage({ type: 'MOUNT_WORKSPACE', payload: { files } });
+  }, [loadPyodide]);
 
-  return { loading, ready, runCode, output, clearOutput, appendOutput, loadPyodide, loadExcel, configPort, exportToSQL };
+  const clearOutput = useCallback(() => setOutput([]), []);
+  const appendOutput = useCallback((msg: string) => setOutput(prev => [...prev, msg]), []);
+
+  return { loading, ready, runCode, output, clearOutput, appendOutput, loadPyodide, loadExcel, configPort, exportToSQL, mountWorkspace };
 }
