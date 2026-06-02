@@ -50,6 +50,43 @@ One-click **Titanic dataset** loader (891 rows) for instant demos — no file re
 
 ---
 
+### Data Profiler
+
+A full-featured, automatic data profiling engine triggered on any loaded CSV. Produces a six-tab interactive report entirely in-browser — no server, no upload.
+
+#### Six-Tab Report
+
+| Tab | What it shows |
+|---|---|
+| **Executive** | Readiness status (Ready / Needs Review / Not Ready), domain-aware business impact cards, plain-English narratives, key relationships without raw coefficients, prioritised action items with owner assignments |
+| **Overview** | Row/column counts, overall quality score, missing-value heatmap, type breakdown, duplicate summary |
+| **Columns** | Per-column deep-dive: distribution histogram, box plot, Q-Q plot, time-series (datetime), word frequency (text), top values, stats table, pattern validity, cardinality, outlier markers |
+| **Correlations** | Pearson, Spearman, and Cramér's V heatmaps; scatter plot matrix; significance stars |
+| **Diagnostics** | Anomaly rows, outlier detail, missing co-occurrence matrix, VIF scores, group statistics |
+| **Samples** | First and last rows of the raw dataset |
+
+#### Python-Side Intelligence (Pyodide)
+- **Trend detection** — datetime columns are split into equal periods; linear regression slope determines `trendDirection` (`up` / `down` / `flat`) and `trendPctChange`
+- **Concentration risk** — categorical columns report the dominant-value share as `concentrationRisk` with a `severe / high / medium / low` label
+- **Distribution shape** — skewness + kurtosis mapped to human labels (`normal`, `skewed_right`, `leptokurtic`, etc.)
+- **Pattern validation** — email, phone, URL, UUID, date formats detected and scored per column
+- **Outlier detection** — IQR method with per-row indices and values for drill-down
+
+#### Domain-Aware Executive Layer
+Column names are tokenised (handles both `snake_case` and `camelCase`) and matched against domain vocabularies — `financial`, `customer`, `product`, `temporal`, `geographic`, `hr` — using exact word matching to avoid substring false-positives. Narratives and impact cards adapt their language accordingly (e.g. *"Financial totals for 'revenue' will be understated"* vs *"1,200 customer records are incomplete"*).
+
+#### HTML Report Export
+Downloads a standalone dark-theme HTML file containing:
+- **Executive summary** at the top — readiness banner, business impact cards, numbered action list
+- Dataset overview stats, key findings, missing-data table
+- Per-column cards with sparkbar histograms and top-value bars
+- Top correlation pairs table with significance stars
+
+#### Chart Captions
+Every chart (histogram, box plot, Q-Q plot, time series, word frequency, scatter, heatmap) renders a one-line plain-English caption beneath it derived from the column's computed statistics.
+
+---
+
 ## Technical Highlights
 
 - **Zero infrastructure cost** — hosted on GitHub Pages, zero backend
@@ -113,8 +150,8 @@ This project was built entirely using **Claude Sonnet** as the primary engineeri
 | Total Spent | $99.16 |
 | Remaining Balance | $0.84 |
 | Tokens Processed | 32,000,000+ |
-| Commits to Production | 25+ |
-| Lines of Code Delivered | 7850+|
+| Commits to Production | 27+ |
+| Lines of Code Delivered | 11,500+ |
 
 Every feature, bug fix, deployment configuration, and architectural decision was implemented within this single budget window — from first commit to live GitHub Pages deployment.
 
