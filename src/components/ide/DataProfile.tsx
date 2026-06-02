@@ -1840,13 +1840,20 @@ function SampleRowsTable({ rows, columns }: { rows: Record<string, string>[]; co
 
 type ColDomain = 'financial' | 'customer' | 'product' | 'temporal' | 'geographic' | 'hr' | 'other';
 function colDomain(name: string): ColDomain {
-  const n = name.toLowerCase();
-  if (/revenue|sales|amount|price|cost|profit|margin|payment|invoice|fee|total|balance|spend|budget|earning|turnover|gross|net/.test(n)) return 'financial';
-  if (/customer|user|client|member|subscriber|contact|account|person|buyer|consumer/.test(n)) return 'customer';
-  if (/product|item|sku|category|brand|model|type|class|segment/.test(n)) return 'product';
-  if (/date|time|timestamp|created|updated|start|end|year|month|week|period|quarter/.test(n)) return 'temporal';
-  if (/city|state|country|region|zip|postal|address|location|territory|district/.test(n)) return 'geographic';
-  if (/salary|wage|department|hire|tenure|position|role|grade|headcount/.test(n)) return 'hr';
+  // Split camelCase then tokenise on non-alphanumeric so "totalOrders" → ["total","orders"]
+  // This prevents substring false-positives ("gender"→"end", "network"→"net", "type"→any column)
+  const words = name
+    .replace(/([a-z])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  const has = (...ws: string[]) => ws.some(w => words.includes(w));
+  if (has('revenue','sales','amount','price','cost','profit','margin','payment','invoice','fee','balance','spend','budget','earning','earnings','gross','net','turnover')) return 'financial';
+  if (has('customer','user','client','member','subscriber','buyer','consumer')) return 'customer';
+  if (has('product','sku','brand','item','segment')) return 'product';
+  if (has('date','time','timestamp','created','updated','year','month','week','period','quarter')) return 'temporal';
+  if (has('city','state','country','region','zip','postal','address','location','territory','district')) return 'geographic';
+  if (has('salary','wage','department','hire','tenure','role','headcount')) return 'hr';
   return 'other';
 }
 
@@ -1960,7 +1967,7 @@ function buildExecDashboard(p: DataProfileType): {
   const dtCols = p.columns.filter(c => c.inferredType === 'datetime' && c.dateMax);
   let daysSince: number | null = null;
   if (dtCols[0]?.dateMax) {
-    daysSince = Math.round((Date.now() - new Date(dtCols[0].dateMax).getTime()) / 86_400_000);
+    daysSince = Math.max(0, Math.round((Date.now() - new Date(dtCols[0].dateMax).getTime()) / 86_400_000));
     if (daysSince > 90) {
       criticalCount++;
       impactCards.push({ icon: '📅', severity: 'critical',
@@ -2015,7 +2022,7 @@ function buildExecDashboard(p: DataProfileType): {
   // ── Pattern validity ────────────────────────────────────────────────────
   const patternCols = p.columns.filter(c => c.patternValidPercent != null && c.patternValidPercent < 85);
   patternCols.forEach(col => {
-    const bad = col.patternValidCount != null ? Math.round((1 - col.patternValidPercent! / 100) * p.rowCount) : '?';
+    const bad = (col.patternValidCount != null && col.patternValidPercent != null) ? Math.round((1 - col.patternValidPercent / 100) * p.rowCount) : '?';
     const owner = col.detectedPattern === 'email' ? 'Marketing' :
                   col.detectedPattern === 'phone' ? 'CRM Team' : 'Data Team';
     const businessImpact = col.detectedPattern === 'email'

@@ -46,6 +46,93 @@ function topValuesBars(tvs: { value: string; count: number; percent?: number }[]
   }).join('');
 }
 
+function buildExecSummaryHtml(profile: DataProfileType): string {
+  let criticalCount = 0, warningCount = 0;
+  const impacts: { sev: 'critical' | 'warning'; icon: string; headline: string; detail: string; owner: string }[] = [];
+  const acts: { priority: 'critical' | 'warning'; owner: string; text: string }[] = [];
+
+  const dtCol = profile.columns.find(c => c.inferredType === 'datetime' && c.dateMax);
+  if (dtCol?.dateMax) {
+    const days = Math.max(0, Math.round((Date.now() - new Date(dtCol.dateMax).getTime()) / 86_400_000));
+    if (days > 90) {
+      criticalCount++;
+      impacts.push({ sev: 'critical', icon: '&#128197;', headline: `Data is ${Math.round(days / 30)} months old`, detail: `Most recent record in &ldquo;${dtCol.name}&rdquo; is from ${dtCol.dateMax}. Decisions may not reflect current reality.`, owner: 'Data Team' });
+      acts.push({ priority: 'critical', owner: 'Data Team', text: `Refresh data &mdash; most recent record is ${Math.round(days / 30)} months old` });
+    } else if (days > 30) {
+      warningCount++;
+      impacts.push({ sev: 'warning', icon: '&#128197;', headline: `Data is ${days} days old`, detail: `Last record in &ldquo;${dtCol.name}&rdquo; was ${dtCol.dateMax}. Verify this is acceptable.`, owner: 'Data Team' });
+    }
+  }
+
+  const nullCols2 = profile.columns.filter(c => c.nullPercent > 15 && !c.isConstant).sort((a, b) => b.nullPercent - a.nullPercent);
+  nullCols2.slice(0, 3).forEach(col => {
+    const affected = Math.round(col.nullPercent / 100 * profile.rowCount);
+    const sev: 'critical' | 'warning' = col.nullPercent > 30 ? 'critical' : 'warning';
+    if (sev === 'critical') criticalCount++; else warningCount++;
+    impacts.push({ sev, icon: '&#9744;', headline: `${affected.toLocaleString()} records (${col.nullPercent}%) missing &ldquo;${col.name}&rdquo;`, detail: `${affected.toLocaleString()} records are incomplete for this field.`, owner: 'Data Team' });
+    acts.push({ priority: sev, owner: 'Data Team', text: `Investigate ${affected.toLocaleString()} missing &ldquo;${col.name}&rdquo; values &mdash; impairs reporting accuracy` });
+  });
+
+  if (profile.duplicateRows > 0) {
+    const sev: 'critical' | 'warning' = profile.duplicatePercent > 5 ? 'critical' : 'warning';
+    if (sev === 'critical') criticalCount++; else warningCount++;
+    impacts.push({ sev, icon: '&#128257;', headline: `${profile.duplicateRows.toLocaleString()} duplicate records`, detail: `~${profile.duplicatePercent}% inflation in counts and totals. Reports will be overstated.`, owner: 'Data Team' });
+    acts.push({ priority: sev, owner: 'Data Team', text: `Remove ${profile.duplicateRows.toLocaleString()} duplicate records &mdash; they inflate totals by ~${profile.duplicatePercent}%` });
+  }
+
+  const readiness = criticalCount > 0 ? 'not-ready' : warningCount > 0 ? 'review' : 'ready';
+  const readinessSummary = readiness === 'ready'
+    ? 'No critical issues found &mdash; data appears ready for analysis and reporting.'
+    : readiness === 'review'
+    ? `${warningCount} issue${warningCount > 1 ? 's' : ''} should be reviewed before presenting this data.`
+    : `${criticalCount} critical issue${criticalCount > 1 ? 's' : ''} must be resolved before this data is used in reports.`;
+  const rs = readiness === 'ready'
+    ? { icon: '&#9989;', border: '#22c55e', bg: 'rgba(34,197,94,.1)', text: '#4ade80', label: 'Ready' }
+    : readiness === 'review'
+    ? { icon: '&#128993;', border: '#eab308', bg: 'rgba(234,179,8,.1)', text: '#fbbf24', label: 'Needs Review' }
+    : { icon: '&#128308;', border: '#ef4444', bg: 'rgba(239,68,68,.1)', text: '#f87171', label: 'Not Ready' };
+
+  const coverage = (100 - profile.totalNullPercent).toFixed(1);
+
+  const impHtml = impacts.map(c => {
+    const bg = c.sev === 'critical' ? 'rgba(239,68,68,.08)' : 'rgba(234,179,8,.08)';
+    const bc = c.sev === 'critical' ? '#ef4444' : '#eab308';
+    const tc = c.sev === 'critical' ? '#fca5a5' : '#fde047';
+    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:${bg};border:1px solid ${bc};border-radius:6px;margin-bottom:6px">
+      <span style="font-size:14px;flex-shrink:0">${c.icon}</span>
+      <div>
+        <div style="font-size:12px;font-weight:600;color:${tc};margin-bottom:2px">${c.headline}</div>
+        <div style="font-size:11px;color:#94a3b8;margin-bottom:3px">${c.detail}</div>
+        <span style="font-size:10px;padding:1px 6px;background:rgba(255,255,255,.04);border:1px solid #334155;border-radius:3px;color:#64748b">Owner: ${c.owner}</span>
+      </div></div>`;
+  }).join('');
+
+  const actHtml = acts.map((a, i) => `
+    <div style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-left:2px solid ${a.priority === 'critical' ? '#ef4444' : '#eab308'};background:${a.priority === 'critical' ? 'rgba(239,68,68,.05)' : 'rgba(234,179,8,.05)'};margin-bottom:4px;border-radius:0 4px 4px 0">
+      <span style="font-size:11px;font-weight:700;color:#64748b;flex-shrink:0;width:16px">${i + 1}.</span>
+      <span style="font-size:11px;color:#cbd5e1"><strong style="font-size:9px;text-transform:uppercase;color:#94a3b8;margin-right:5px">[${a.owner}]</strong>${a.text}</span>
+    </div>`).join('');
+
+  return `
+  <section style="border:1px solid ${rs.border};border-radius:10px;overflow:hidden;margin-bottom:32px">
+    <div style="background:${rs.bg};padding:14px 16px;display:flex;align-items:flex-start;gap:12px;border-bottom:1px solid ${rs.border}">
+      <span style="font-size:20px;flex-shrink:0">${rs.icon}</span>
+      <div>
+        <div style="font-size:15px;font-weight:700;color:${rs.text}">${rs.label}</div>
+        <div style="font-size:12px;color:#cbd5e1;margin-top:3px">${readinessSummary}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+          <span style="font-size:10px;color:#64748b;padding:2px 8px;background:rgba(255,255,255,.04);border:1px solid #334155;border-radius:4px">${profile.rowCount.toLocaleString()} records &middot; ${profile.columnCount} fields</span>
+          <span style="font-size:10px;color:#64748b;padding:2px 8px;background:rgba(255,255,255,.04);border:1px solid #334155;border-radius:4px">${coverage}% data coverage</span>
+          ${profile.duplicateRows === 0 ? '<span style="font-size:10px;color:#4ade80;padding:2px 8px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:4px">No duplicates</span>' : ''}
+        </div>
+      </div>
+    </div>
+    ${impacts.length > 0 ? `<div style="padding:14px 16px 8px"><div style="font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Business Impact</div>${impHtml}</div>` : ''}
+    ${acts.length > 0 ? `<div style="padding:8px 16px 14px"><div style="font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Action Items for Your Team</div>${actHtml}</div>` : ''}
+    ${impacts.length === 0 && acts.length === 0 ? '<div style="padding:20px;text-align:center;font-size:12px;color:#64748b">&#9989; No issues found &mdash; this dataset appears clean and ready for use.</div>' : ''}
+  </section>`;
+}
+
 export function generateHtmlReport(profile: DataProfileType, filename = 'dataset'): string {
   const ts = new Date().toLocaleString();
   const numCols  = profile.columns.filter(c => c.inferredType === 'numeric');
@@ -161,7 +248,7 @@ export function generateHtmlReport(profile: DataProfileType, filename = 'dataset
         ${col.cardinality ? `<span class="badge badge-card ${cardClass(col.cardinality)}">${col.cardinality}</span>` : ''}
       </div>
       <div style="font-size:11px;color:#64748b;margin-bottom:4px">
-        ${col.uniqueCount} unique · ${col.nullPercent}% null · ${col.count} rows
+        ${col.uniqueCount} unique &middot; ${col.nullPercent}% null &middot; ${profile.rowCount.toLocaleString()} rows
       </div>
       ${nullFill}
       ${statsRows ? `<table class="stats-table"><tbody>${statsRows}</tbody></table>` : ''}
@@ -199,8 +286,10 @@ export function generateHtmlReport(profile: DataProfileType, filename = 'dataset
   const body = `
   <header>
     <h1>Data Profile Report</h1>
-    <div class="meta">File: <strong>${filename}</strong> · Generated: ${ts}</div>
+    <div class="meta">File: <strong>${filename}</strong> &middot; Generated: ${ts}</div>
   </header>
+
+  ${buildExecSummaryHtml(profile)}
 
   <section class="section">
     <h2>Dataset Overview</h2>
@@ -227,7 +316,7 @@ export function generateHtmlReport(profile: DataProfileType, filename = 'dataset
     ${nullCols.length === 0 ? '<p style="font-size:12px;color:#64748b">No missing values.</p>' : `
     <table class="corr-table">
       <thead><tr><th>Column</th><th>Null %</th><th>Null Count</th></tr></thead>
-      <tbody>${nullCols.map(c => `<tr><td>${c.name}</td><td style="color:${nullColor(c.nullPercent)}">${c.nullPercent}%</td><td style="font-family:monospace">${Math.round(c.nullPercent / 100 * c.count)}</td></tr>`).join('')}</tbody>
+      <tbody>${nullCols.map(c => `<tr><td>${c.name}</td><td style="color:${nullColor(c.nullPercent)}">${c.nullPercent}%</td><td style="font-family:monospace">${Math.round(c.nullPercent / 100 * profile.rowCount).toLocaleString()}</td></tr>`).join('')}</tbody>
     </table>`}
   </section>
 
